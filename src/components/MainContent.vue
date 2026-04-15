@@ -2,44 +2,41 @@
   <div class="main-content">
     <div class="conversation-container">
       <div class="conversation-header">
-        <h2 class="conversation-title">Microservices Architecture:</h2>
+        <h2 class="conversation-title">与模型对话</h2>
         <div class="conversation-actions">
+          <el-select v-model="selectedModel" placeholder="选择模型" size="small">
+            <el-option
+              v-for="model in models"
+              :key="model.id"
+              :label="model.name"
+              :value="model.id"
+            />
+          </el-select>
           <el-button type="text" icon="Edit" />
           <el-button type="text" icon="More" />
         </div>
       </div>
       <div class="conversation-body">
-        <div class="user-message">
-          <div class="message-card user-card">
-            <div class="message-content">
-              What is the main concept of microservices architecture?
+        <div
+          v-for="(message, index) in messages"
+          :key="index"
+          :class="message.role === 'user' ? 'user-message' : 'ai-message'"
+        >
+          <div class="message-card" :class="message.role === 'user' ? 'user-card' : 'ai-card'">
+            <div v-if="message.role === 'assistant'" class="ai-avatar">
+              <el-avatar size="small" :src="aiAvatar" />
             </div>
-          </div>
-        </div>
-        <div class="ai-message">
-          <div class="message-card ai-card">
-            <div class="ai-avatar">
-              <el-avatar size="32" :src="aiAvatar" />
-            </div>
-            <div class="ai-content-wrapper">
-              <div class="ai-thinking">
+            <div v-if="message.role === 'assistant'" class="ai-content-wrapper">
+              <div v-if="message.status === 'loading'" class="ai-thinking">
                 <span>Thinking...</span>
                 <div class="progress-bar">
-                  <div class="progress-fill" style="width: 100%;"></div>
+                  <div class="progress-fill" :style="{ width: '60%' }"></div>
                 </div>
               </div>
-              <div class="ai-content">
-                <p>Microservices architecture is an approach to software development where an application is composed of small, independent services that communicate with each other using well-defined APIs. Each service is self-contained and can be developed, deployed, and scaled independently.</p>
-                
-                <h3>Key Characteristics:</h3>
-                
-                <ul>
-                  <li><strong>Service Independence:</strong> Each service can be developed, deployed, and scaled independently.</li>
-                  <li><strong>Decentralized Data Management:</strong> Each service typically has its own database.</li>
-                  <li><strong>Resilience:</strong> Failure of one service doesn't affect the entire system.</li>
-                  <li><strong>Scalability:</strong> Services can be scaled individually based on demand.</li>
-                  <li><strong>Technology Diversity:</strong> Different services can use different technologies.</li>
-                </ul>
+              <div v-else class="ai-content">
+                <p v-for="(line, lineIndex) in message.content.split('\n')" :key="lineIndex" v-if="line && line.trim()">
+                  {{ line }}
+                </p>
               </div>
               <div class="ai-footer">
                 <el-button type="text" size="small" class="thinking-button">
@@ -50,123 +47,10 @@
                 </el-button>
               </div>
             </div>
-            <div class="ai-graph">
-              <div class="graph-placeholder">
-                <div class="graph-node main-node"></div>
-                <div class="graph-node secondary-node"></div>
-                <div class="graph-node secondary-node"></div>
-                <div class="graph-node secondary-node"></div>
-                <div class="graph-node secondary-node"></div>
-              </div>
+            <div v-else class="message-content">
+              {{ message.content }}
             </div>
-          </div>
-        </div>
-        
-        <div class="user-message">
-          <div class="message-card user-card">
-            <div class="message-content">
-              Summary of the "Tech Stack" cell, please.
-            </div>
-          </div>
-        </div>
-        <div class="ai-message">
-          <div class="message-card ai-card">
-            <div class="ai-avatar">
-              <el-avatar size="32" :src="aiAvatar" />
-            </div>
-            <div class="ai-content-wrapper">
-              <div class="ai-thinking">
-                <span>Thinking...</span>
-                <div class="progress-bar">
-                  <div class="progress-fill" style="width: 60%;"></div>
-                </div>
-              </div>
-              <div class="ai-content">
-                <p>There are comparsent of chroroc of stack cell summary of the "Tech Stack" cell thevase and mow formats.</p>
-                
-                <h3>AI Responses.</h3>
-                
-                <h4>Preparations:</h4>
-                <ul>
-                  <li>API Gateway: anridlesan api onolidew, microservices, Microservices architecture</li>
-                  <li>Microservices Architecture : aride nignatirze accessories gateway, openaris, and api-reiconterdoptions</li>
-                  <li>Microservices Architecture : concerteetrices, microservices, and alterscassing toneds on microservices.</li>
-                </ul>
-                
-                <h4>Relationships:</h4>
-                <ul>
-                  <li>API Gateway: compons ioies with shared concepts</li>
-                  <li>Microservices Architecture: ieign computen fines and casuallation communications.</li>
-                </ul>
-                
-                <p>Here is what onnovrectozs soon in aiy <a href="#" class="link">knowledge graph</a>.</p>
-              </div>
-              <div class="ai-footer">
-                <el-button type="text" size="small" class="thinking-button">
-                  <el-icon><Star /></el-icon> Thinking
-                </el-button>
-                <el-button type="text" size="small">
-                  <el-icon><Refresh /></el-icon>
-                </el-button>
-              </div>
-            </div>
-            <div class="ai-graph">
-              <div class="graph-placeholder">
-                <div class="graph-node main-node"></div>
-                <div class="graph-node secondary-node"></div>
-                <div class="graph-node secondary-node"></div>
-                <div class="graph-node secondary-node"></div>
-                <div class="graph-node secondary-node"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <div class="user-message">
-          <div class="message-card user-card">
-            <div class="message-content">
-              How does API Gateway work in microservices architecture?
-            </div>
-          </div>
-        </div>
-        <div class="ai-message">
-          <div class="message-card ai-card">
-            <div class="ai-avatar">
-              <el-avatar size="32" :src="aiAvatar" />
-            </div>
-            <div class="ai-content-wrapper">
-              <div class="ai-thinking">
-                <span>Thinking...</span>
-                <div class="progress-bar">
-                  <div class="progress-fill" style="width: 100%;"></div>
-                </div>
-              </div>
-              <div class="ai-content">
-                <p>An API Gateway acts as a single entry point for all client requests to the microservices architecture. It routes requests to the appropriate service, handles cross-cutting concerns, and provides a unified interface to clients.</p>
-                
-                <h3>Key Functions:</h3>
-                
-                <ul>
-                  <li><strong>Request Routing:</strong> Directs client requests to the appropriate microservice.</li>
-                  <li><strong>Load Balancing:</strong> Distributes requests across multiple instances of a service.</li>
-                  <li><strong>Authentication and Authorization:</strong> Verifies user identity and permissions.</li>
-                  <li><strong>Rate Limiting:</strong> Controls the number of requests a client can make.</li>
-                  <li><strong>Cache Management:</strong> Stores frequently accessed data to improve performance.</li>
-                  <li><strong>Protocol Translation:</strong> Converts between different protocols (e.g., HTTP to gRPC).</li>
-                </ul>
-                
-                <p>Popular API Gateway solutions include Amazon API Gateway, Kong, and Netflix Zuul.</p>
-              </div>
-              <div class="ai-footer">
-                <el-button type="text" size="small" class="thinking-button">
-                  <el-icon><Star /></el-icon> Helpful
-                </el-button>
-                <el-button type="text" size="small">
-                  <el-icon><Refresh /></el-icon>
-                </el-button>
-              </div>
-            </div>
-            <div class="ai-graph">
+            <div v-if="message.role === 'assistant'" class="ai-graph">
               <div class="graph-placeholder">
                 <div class="graph-node main-node"></div>
                 <div class="graph-node secondary-node"></div>
@@ -186,18 +70,20 @@
         </el-button>
         <el-input
           v-model="messageInput"
-          placeholder="拖动细胞进行提问....."
+          placeholder="请输入您的问题....."
           class="message-input"
           type="textarea"
           :rows="1"
           :autosize="{ minRows: 1, maxRows: 2 }"
           maxlength="500"
+          @keyup.enter.exact="sendMessage"
         />
         <el-button 
           type="primary" 
           class="send-button"
-          :disabled="!messageInput.trim()"
-          :class="{ disabled: !messageInput.trim() }"
+          :disabled="isSendButtonDisabled"
+          :class="{ disabled: isSendButtonDisabled }"
+          @click="sendMessage"
         >
           <el-icon><ArrowUp /></el-icon>
         </el-button>
@@ -207,11 +93,156 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { Message, ArrowRight, Edit, More, Paperclip, Star, Refresh, ArrowUp, Plus, ChatLineRound, Microphone } from '@element-plus/icons-vue'
 
 const messageInput = ref('')
 const aiAvatar = 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=AI%20assistant%20icon%20blue%20simple&image_size=square'
+const messages = ref([])
+const models = ref([])
+const selectedModel = ref('')
+const isLoading = ref(false)
+const chatId = ref('00000000-0000-0000-0000-000000000000')
+
+const isSendButtonDisabled = computed(() => {
+  const result = !messageInput.value || !messageInput.value.trim() || !selectedModel.value || isLoading.value
+  console.log('isSendButtonDisabled:', result)
+  console.log('messageInput.value:', messageInput.value)
+  console.log('messageInput.value.trim():', messageInput.value ? messageInput.value.trim() : 'undefined')
+  console.log('selectedModel.value:', selectedModel.value)
+  console.log('isLoading.value:', isLoading.value)
+  return result
+})
+
+onMounted(() => {
+  loadModels()
+})
+
+const loadModels = async () => {
+  try {
+    console.log('加载模型列表...')
+    const response = await fetch('/api/model')
+    console.log('响应状态:', response.status)
+    const data = await response.json()
+    console.log('模型列表:', data)
+    models.value = data
+    if (data.length > 0) {
+      selectedModel.value = data[0].id
+      console.log('选择的模型:', selectedModel.value)
+    }
+  } catch (error) {
+    console.error('加载模型失败:', error)
+  }
+}
+
+const sendMessage = async () => {
+  console.log('sendMessage 函数被调用')
+  console.log('messageInput.value:', messageInput.value)
+  console.log('selectedModel.value:', selectedModel.value)
+  if (!messageInput.value.trim() || !selectedModel.value) return
+  
+  const userMessage = messageInput.value.trim()
+  messages.value.push({
+    role: 'user',
+    content: userMessage
+  })
+  
+  const aiMessageIndex = messages.value.length
+  messages.value.push({
+    role: 'assistant',
+    content: '',
+    status: 'loading'
+  })
+  
+  messageInput.value = ''
+  isLoading.value = true
+  
+  try {
+    console.log('发送消息请求到:', `/api/chat/${chatId.value}/chat`)
+    console.log('请求参数:', {
+      message: userMessage,
+      model_id: selectedModel.value,
+      workspace_id: '00000000-0000-0000-0000-000000000000'
+    })
+    const response = await fetch(`/api/chat/${chatId.value}/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        message: userMessage,
+        model_id: selectedModel.value,
+        workspace_id: '00000000-0000-0000-0000-000000000000'
+      })
+    })
+    console.log('响应状态:', response.status)
+    
+    if (response.ok) {
+      console.log('响应类型:', response.headers.get('Content-Type'))
+      console.log('响应体:', response.body)
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let fullContent = ''
+      
+      while (true) {
+        const { done, value } = await reader.read()
+        console.log('读取数据块:', { done, value: value ? value.length : 0 })
+        if (done) break
+        
+        const chunk = decoder.decode(value)
+        console.log('解码后的数据:', chunk)
+        const lines = chunk.split('\n')
+        console.log('分割后的行:', lines)
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.substring(6)
+            console.log('提取的数据:', data)
+            if (data) {
+              try {
+                const json = JSON.parse(data)
+                console.log('解析后的JSON:', json)
+                if (json.content) {
+                  fullContent += json.content
+                  console.log('当前完整内容:', fullContent)
+                  messages.value[aiMessageIndex] = {
+                    ...messages.value[aiMessageIndex],
+                    content: fullContent,
+                    status: json.is_end ? 'completed' : 'loading'
+                  }
+                }
+                if (json.is_end) {
+                  messages.value[aiMessageIndex] = {
+                    ...messages.value[aiMessageIndex],
+                    status: 'completed'
+                  }
+                }
+              } catch (e) {
+                console.error('解析SSE数据失败:', e)
+              }
+            }
+          }
+        }
+      }
+    } else {
+      const error = await response.json()
+      messages.value[aiMessageIndex] = {
+        ...messages.value[aiMessageIndex],
+        content: `错误: ${error.error || '发送消息失败'}`,
+        status: 'error'
+      }
+    }
+  } catch (error) {
+    console.error('发送消息失败:', error)
+    messages.value[aiMessageIndex] = {
+      ...messages.value[aiMessageIndex],
+      content: `错误: ${error.message || '网络错误'}`,
+      status: 'error'
+    }
+  } finally {
+    isLoading.value = false
+  }
+}
 </script>
 
 <style scoped>

@@ -1,19 +1,24 @@
 <template>
   <div class="app-container">
-    <AppHeader />
-    <div class="main-container">
+    <AppHeader @open-settings="showSettings = true" />
+    <div class="main-container" v-if="!showSettings">
       <LeftSidebar />
       <MainContent />
       <RightSidebar />
     </div>
+    <Settings v-else @close-settings="showSettings = false" />
   </div>
 </template>
 
 <script setup>
+import { ref } from 'vue'
 import AppHeader from './components/AppHeader.vue'
 import LeftSidebar from './components/LeftSidebar.vue'
 import MainContent from './components/MainContent.vue'
 import RightSidebar from './components/RightSidebar.vue'
+import Settings from './components/Settings.vue'
+
+const showSettings = ref(false)
 </script>
 
 <style scoped>
