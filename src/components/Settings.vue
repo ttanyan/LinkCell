@@ -180,7 +180,8 @@ const openAddModelDialog = () => {
     model_name: '',
     credential: {
       api_key: '',
-      api_base: ''
+      api_base: '',
+      api_url: ''
     }
   }
   availableModels.value = []

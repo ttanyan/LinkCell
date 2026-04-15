@@ -74,8 +74,15 @@ class BaseChatStep(IBaseChatPipelineStep):
                      paragraph_list, manage, **kwargs):
         result = chat_model.invoke(message_list)
         
-        request_token = chat_model.get_num_tokens_from_messages(message_list)
-        response_token = chat_model.get_num_tokens(result.content)
+        try:
+            request_token = chat_model.get_num_tokens_from_messages(message_list)
+        except Exception as e:
+            request_token = 0
+        
+        try:
+            response_token = chat_model.get_num_tokens(result.content)
+        except Exception as e:
+            response_token = 0
         
         self.context['message_tokens'] = request_token
         self.context['answer_tokens'] = response_token
@@ -112,8 +119,15 @@ def event_content(response, chat_id, chat_record_id, paragraph_list,
                 {'reasoning_content': reasoning_content}
             )
         
-        request_token = chat_model.get_num_tokens_from_messages(message_list)
-        response_token = chat_model.get_num_tokens(all_text)
+        try:
+            request_token = chat_model.get_num_tokens_from_messages(message_list)
+        except Exception as e:
+            request_token = 0
+        
+        try:
+            response_token = chat_model.get_num_tokens(all_text)
+        except Exception as e:
+            response_token = 0
         
         step.context['message_tokens'] = request_token
         step.context['answer_tokens'] = response_token

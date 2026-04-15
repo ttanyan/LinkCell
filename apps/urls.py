@@ -1,5 +1,5 @@
 from django.urls import path
-from models_provider.views import ModelProviderList, ModelList, ModelCredentialValid, ModelCreate, ModelListAll
+from models_provider.views import ModelProviderList, ModelList, ModelCredentialValid, ModelCreate, ModelListAll, ModelDelete
 from application.views import ChatView, OpenAIChatView
 
 urlpatterns = [
@@ -9,6 +9,7 @@ urlpatterns = [
     path('api/model/provider/<str:provider>/valid', ModelCredentialValid.as_view(), name='model_credential_valid'),
     path('api/model', ModelListAll.as_view(), name='model_list_all'),
     path('api/model/create', ModelCreate.as_view(), name='model_create'),
+    path('api/model/<str:model_id>', ModelDelete.as_view(), name='model_delete'),
     
     # 对话API
     path('api/chat/<str:chat_id>/chat', ChatView.as_view(), name='chat'),

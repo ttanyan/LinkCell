@@ -98,3 +98,12 @@ class ModelCreate(APIView):
             })
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class ModelDelete(APIView):
+    def delete(self, request, model_id):
+        try:
+            model = Model.objects.get(id=model_id)
+            model.delete()
+            return Response({'success': True})
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
