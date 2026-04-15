@@ -1,0 +1,69 @@
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from application.chat_pipeline.pipeline_manage import PipelineManage
+from application.chat_pipeline.step.generate_human_message_step.impl.base_generate_human_message_step import BaseGenerateHumanMessageStep
+from application.chat_pipeline.step.chat_step.impl.base_chat_step import BaseChatStep
+import uuid
+
+class ChatView(APIView):
+    def post(self, request, chat_id):
+        data = request.data
+        message = data.get('message')
+        stream = data.get('stream', True)
+        
+        if not message:
+            return Response({'error': 'Message is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            chat_id = uuid.UUID(chat_id)
+        except ValueError:
+            return Response({'error': 'Invalid chat_id'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        pipeline = PipelineManage.Builder()
+        pipeline.append_step(BaseGenerateHumanMessageStep)
+        pipeline.append_step(BaseChatStep)
+        
+        context = {
+            'problem_text': message,
+            'chat_id': chat_id,
+            'model_id': data.get('model_id'),
+            'workspace_id': data.get('workspace_id', uuid.uuid4()),
+            'stream': stream,
+            'history_chat_record': data.get('history', []),
+            'paragraph_list': data.get('paragraphs', [])
+        }
+        
+        result = pipeline.build().run(context)
+        return result
+
+class OpenAIChatView(APIView):
+    def post(self, request, app_id):
+        data = request.data
+        messages = data.get('messages', [])
+        stream = data.get('stream', True)
+        
+        if not messages:
+            return Response({'error': 'Messages are required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        last_message = messages[-1]
+        if last_message.get('role') != 'user':
+            return Response({'error': 'Last message must be from user'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        chat_id = uuid.uuid4()
+        pipeline = PipelineManage.Builder()
+        pipeline.append_step(BaseGenerateHumanMessageStep)
+        pipeline.append_step(BaseChatStep)
+        
+        context = {
+            'problem_text': last_message.get('content'),
+            'chat_id': chat_id,
+            'model_id': data.get('model_id'),
+            'workspace_id': data.get('workspace_id', uuid.uuid4()),
+            'stream': stream,
+            'history_chat_record': [],
+            'paragraph_list': []
+        }
+        
+        result = pipeline.build().run(context)
+        return result

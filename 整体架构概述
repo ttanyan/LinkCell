@@ -1,0 +1,1080 @@
+## 一、整体架构概述
+
+本模块负责**模型的统一接入**和**对话流程管理**，采用**策略模式 + 责任链模式**的设计。
+
+```
+┌─────────────────────────────────────────────────┐
+│              应用层 (Application)                 │
+│  - 接收用户请求                                   │
+│  - 调用对话流水线                                 │
+└──────────────────┬──────────────────────────────┘
+                   │
+┌──────────────────▼──────────────────────────────┐
+│          对话流水线层 (Chat Pipeline)             │
+│  - PipelineManage (流水线管理器)                  │
+│  - Step1: 问题优化 (可选)                         │
+│  - Step2: 知识检索 (可选)                         │
+│  - Step3: 消息构建                                │
+│  - Step4: 模型对话 ← 核心步骤                     │
+└──────────────────┬──────────────────────────────┘
+                   │
+┌──────────────────▼──────────────────────────────┐
+│         模型提供商层 (Model Provider)             │
+│  - IModelProvider (接口)                         │
+│  - OpenAIProvider / OllamaProvider / ...        │
+│  - ModelInfoManage (模型信息管理)                │
+└──────────────────┬──────────────────────────────┘
+                   │
+┌──────────────────▼──────────────────────────────┐
+│           模型实例层 (Model Instance)             │
+│  - MaxKBBaseModel (基类)                         │
+│  - OpenAIChatModel / OllamaChatModel / ...      │
+│  - 基于 LangChain 封装                           │
+└─────────────────────────────────────────────────┘
+```
+
+---
+
+## 二、核心模块设计
+
+### 2.1 模型提供商模块 (Model Provider)
+
+#### 2.1.1 核心抽象类
+
+**文件**: `models_provider/base_model_provider.py`
+
+```python
+# 1. 模型类型枚举
+class ModelTypeConst(Enum):
+    LLM = 'LLM'              # 大语言模型
+    EMBEDDING = 'EMBEDDING'  # 向量嵌入模型
+    STT = 'STT'              # 语音转文字
+    TTS = 'TTS'              # 文字转语音
+    IMAGE = 'IMAGE'          # 视觉模型
+
+# 2. 模型基类（所有模型必须继承）
+class MaxKBBaseModel(ABC):
+    @staticmethod
+    @abstractmethod
+    def new_instance(model_type, model_name, model_credential, **model_kwargs):
+        """工厂方法：创建模型实例"""
+        pass
+    
+    @staticmethod
+    def filter_optional_params(model_kwargs):
+        """过滤并提取可选参数"""
+        pass
+
+# 3. 凭证验证基类
+class BaseModelCredential(ABC):
+    @abstractmethod
+    def is_valid(self, model_type, model_name, model_credential, 
+                 model_params, provider, raise_exception=True):
+        """验证 API Key 等凭证是否有效"""
+        pass
+    
+    @abstractmethod
+    def encryption_dict(self, model_info):
+        """加密敏感信息（如 API Key）"""
+        pass
+
+# 4. 模型信息封装
+class ModelInfo:
+    def __init__(self, name, desc, model_type, model_credential, model_class):
+        self.name = name                    # 模型名称
+        self.desc = desc                    # 模型描述
+        self.model_type = model_type        # 模型类型
+        self.model_credential = credential  # 凭证验证器
+        self.model_class = model_class      # 模型类
+
+# 5. 模型提供商接口（每个厂商实现此接口）
+class IModelProvider(ABC):
+    @abstractmethod
+    def get_model_info_manage(self):
+        """返回模型信息管理器"""
+        pass
+    
+    def get_model(self, model_type, model_name, model_credential, **kwargs):
+        """获取模型实例（通用方法）"""
+        model_info = self.get_model_info_manage().get_model_info(model_type, model_name)
+        return model_info.model_class.new_instance(
+            model_type, model_name, model_credential, **kwargs
+        )
+    
+    def get_model_list(self, model_type):
+        """获取该提供商支持的模型列表"""
+        pass
+    
+    def is_valid_credential(self, model_type, model_name, 
+                           model_credential, model_params):
+        """验证凭证"""
+        pass
+
+# 6. 模型信息管理器
+class ModelInfoManage:
+    def __init__(self):
+        self.model_dict = {}        # {model_type: {model_name: ModelInfo}}
+        self.model_list = []        # 所有模型列表
+        self.default_model_dict = {} # {model_type: default_ModelInfo}
+    
+    def get_model_info(self, model_type, model_name):
+        """根据类型和名称获取模型信息"""
+        pass
+    
+    class Builder:
+        """建造者模式构建 ModelInfoManage"""
+        def append_model_info(self, model_info): ...
+        def append_model_info_list(self, model_list): ...
+        def set_default_model(self, model_type, model_info): ...
+        def build(self): ...
+```
+
+#### 2.1.2 具体实现示例（以 OpenAI 为例）
+
+**文件结构**:
+```
+models_provider/impl/openai_model_provider/
+├── openai_model_provider.py    # 提供商实现
+├── model/
+│   └── llm.py                  # 模型类实现
+└── credential/
+    └── llm.py                  # 凭证验证实现
+```
+
+**实现要点**:
+
+```python
+# 1. 凭证验证
+class OpenAILLMCredential(BaseModelCredential):
+    def is_valid(self, model_type, model_name, model_credential, ...):
+        api_key = model_credential.get('api_key')
+        # 调用 OpenAI API 验证
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+        client.models.list()
+        return True
+
+# 2. 模型类
+class OpenAIChatModel(MaxKBBaseModel, ChatOpenAI):
+    @staticmethod
+    def new_instance(model_type, model_name, model_credential, **kwargs):
+        optional_params = MaxKBBaseModel.filter_optional_params(kwargs)
+        return OpenAIChatModel(
+            model=model_name,
+            openai_api_base=model_credential.get('api_base'),
+            openai_api_key=model_credential.get('api_key'),
+            streaming=kwargs.get('streaming', True),
+            extra_body=optional_params
+        )
+
+# 3. 提供商类
+class OpenAIModelProvider(IModelProvider):
+    def get_model_info_manage(self):
+        # 使用 Builder 构建
+        return (ModelInfoManage.Builder()
+            .append_model_info_list([
+                ModelInfo('gpt-4', '...', 'LLM', 
+                         OpenAILLMCredential(), OpenAIChatModel),
+                ModelInfo('gpt-3.5-turbo', '...', 'LLM',
+                         OpenAILLMCredential(), OpenAIChatModel),
+            ])
+            .set_default_model('LLM', default_model_info)
+            .build())
+    
+    def get_model_provide_info(self):
+        return {'provider': 'openai', 'name': 'OpenAI', 'icon': '...'}
+```
+
+#### 2.1.3 模型注册与发现
+
+**文件**: `models_provider/constants/model_provider_constants.py`
+
+```python
+from enum import Enum
+from models_provider.impl.openai_model_provider.openai_model_provider import OpenAIModelProvider
+from models_provider.impl.ollama_model_provider.ollama_model_provider import OllamaModelProvider
+# ... 其他提供商
+
+class ModelProvideConstants(Enum):
+    """模型提供商常量注册表"""
+    model_openai_provider = OpenAIModelProvider()
+    model_ollama_provider = OllamaModelProvider()
+    # ... 添加新提供商只需在此注册
+```
+
+**工具函数**: `models_provider/tools.py`
+
+```python
+def get_provider(provider_name):
+    """根据提供商名称获取提供商实例"""
+    return ModelProvideConstants[provider_name].value
+
+def get_model_instance_by_model_workspace_id(model_id, workspace_id, **kwargs):
+    """
+    根据模型 ID 获取模型实例（带缓存）
+    
+    流程:
+    1. 从数据库查询模型配置
+    2. 解密凭证
+    3. 获取提供商
+    4. 创建模型实例
+    5. 缓存实例
+    """
+    model = get_model_by_id(model_id, workspace_id)
+    provider = get_provider(model.provider)
+    credential = decrypt(model.credential)  # RSA 解密
+    return provider.get_model(
+        model.model_type, 
+        model.model_name, 
+        credential, 
+        **kwargs
+    )
+```
+
+---
+
+### 2.2 对话流水线模块 (Chat Pipeline)
+
+#### 2.2.1 流水线管理器
+
+**文件**: `application/chat_pipeline/pipeline_manage.py`
+
+```python
+class PipelineManage:
+    """
+    对话流水线管理器 - 责任链模式
+    
+    执行流程:
+    1. 初始化所有步骤
+    2. 依次执行每个步骤
+    3. 步骤间通过 context 传递数据
+    """
+    
+    def __init__(self, step_list, base_to_response=None, debug=False):
+        self.step_list = [step() for step in step_list]  # 实例化步骤
+        self.context = {
+            'message_tokens': 0,
+            'answer_tokens': 0,
+            'start_time': None
+        }
+        self.base_to_response = base_to_response  # 响应格式化器
+        self.debug = debug
+    
+    def run(self, context: Dict):
+        """
+        运行流水线
+        
+        Args:
+            context: 包含所有需要的参数
+                - problem_text: 用户问题
+                - chat_id: 对话ID
+                - model_id: 模型ID
+                - stream: 是否流式输出
+                - post_response_handler: 后置处理器
+                - ... 其他参数
+        """
+        self.context['start_time'] = time.time()
+        
+        # 合并传入的上下文
+        self.context.update(context)
+        
+        # 依次执行每个步骤
+        for step in self.step_list:
+            step.run(self)  # 每个步骤可以访问和修改 self.context
+        
+        # 返回最终结果
+        return self.context.get('chat_result')
+    
+    class Builder:
+        """建造者模式构建 PipelineManage"""
+        def __init__(self):
+            self.step_list = []
+            self.base_to_response = SystemToResponse()
+            self.debug = False
+        
+        def append_step(self, step_class):
+            self.step_list.append(step_class)
+            return self
+        
+        def add_base_to_response(self, handler):
+            self.base_to_response = handler
+            return self
+        
+        def build(self):
+            return PipelineManage(
+                step_list=self.step_list,
+                base_to_response=self.base_to_response,
+                debug=self.debug
+            )
+```
+
+#### 2.2.2 流水线步骤接口
+
+**文件**: `application/chat_pipeline/I_base_chat_pipeline.py`
+
+```python
+class IBaseChatPipelineStep:
+    """
+    流水线步骤基类
+    
+    每个步骤的职责:
+    1. 验证输入参数
+    2. 执行业务逻辑
+    3. 将结果写入 manage.context
+    """
+    
+    def __init__(self):
+        self.context = {}  # 当前步骤的上下文
+    
+    def run(self, manage: PipelineManage):
+        """
+        运行步骤（模板方法）
+        
+        流程:
+        1. 记录开始时间
+        2. 验证参数
+        3. 执行具体逻辑 (_run)
+        4. 记录运行时间
+        """
+        start_time = time.time()
+        self.valid_args(manage)  # 验证参数
+        self._run(manage)         # 执行逻辑
+        self.context['run_time'] = time.time() - start_time
+    
+    def valid_args(self, manage):
+        """验证参数（使用 Serializer）"""
+        serializer_class = self.get_step_serializer(manage)
+        serializer = serializer_class(data=manage.context)
+        serializer.is_valid(raise_exception=True)
+        self.context['step_args'] = serializer.data
+    
+    @abstractmethod
+    def get_step_serializer(self, manage) -> Type[Serializer]:
+        """返回参数验证器"""
+        pass
+    
+    @abstractmethod
+    def _run(self, manage):
+        """执行步骤逻辑（子类实现）"""
+        pass
+    
+    def execute(self, **kwargs):
+        """直接执行步骤（不经过流水线）"""
+        pass
+```
+
+#### 2.2.3 核心步骤实现
+
+##### 步骤1: 问题优化（可选）
+
+**文件**: `application/chat_pipeline/step/reset_problem_step/impl/base_reset_problem_step.py`
+
+```python
+class BaseResetProblemStep(IBaseChatPipelineStep):
+    """
+    问题优化步骤
+    
+    功能:
+    - 结合历史对话优化当前问题
+    - 使问题更清晰、完整
+    
+    输入:
+    - problem_text: 原始问题
+    - history_chat_record: 历史对话记录
+    - model_id: 用于优化的模型
+    
+    输出:
+    - padding_problem_text: 优化后的问题
+    """
+    
+    def _run(self, manage):
+        args = self.context['step_args']
+        padding_problem = self.execute(**args)
+        
+        # 写入上下文供后续步骤使用
+        manage.context['padding_problem_text'] = padding_problem
+        manage.context['problem_text'] = args['problem_text']
+```
+
+##### 步骤2: 知识检索（可选）
+
+**文件**: `application/chat_pipeline/step/search_dataset_step/impl/base_search_dataset_step.py`
+
+```python
+class BaseSearchDatasetStep(IBaseChatPipelineStep):
+    """
+    知识库检索步骤
+    
+    功能:
+    - 根据问题检索相关知识段落
+    - 向量相似度搜索
+    
+    输入:
+    - problem_text: 问题文本
+    - knowledge_id_list: 知识库ID列表
+    
+    输出:
+    - paragraph_list: 检索到的段落列表
+    """
+    
+    def _run(self, manage):
+        args = self.context['step_args']
+        paragraph_list = self.execute(**args)
+        
+        # 写入上下文
+        manage.context['paragraph_list'] = paragraph_list
+```
+
+##### 步骤3: 消息构建
+
+**文件**: `application/chat_pipeline/step/generate_human_message_step/impl/base_generate_human_message_step.py`
+
+```python
+class BaseGenerateHumanMessageStep(IBaseChatPipelineStep):
+    """
+    生成人类消息步骤
+    
+    功能:
+    - 构建完整的消息列表
+    - 包含系统提示词、历史对话、知识段落
+    
+    输入:
+    - problem_text: 问题
+    - paragraph_list: 知识段落
+    - history_chat_record: 历史对话
+    - prompt: 提示词模板
+    - dialogue_number: 历史对话轮数
+    
+    输出:
+    - message_list: 完整的消息列表
+    """
+    
+    def execute(self, problem_text, paragraph_list, history_chat_record,
+                dialogue_number, max_paragraph_char_number, prompt, ...):
+        """
+        构建消息列表
+        
+        Returns:
+            List[BaseMessage]: [
+                SystemMessage(system_prompt),
+                HumanMessage(history_1),
+                AIMessage(history_1_answer),
+                ...,
+                HumanMessage(current_question_with_context)
+            ]
+        """
+        # 1. 处理提示词模板
+        prompt = prompt if paragraph_list else no_references_setting['value']
+        
+        # 2. 获取历史对话
+        start_index = len(history_chat_record) - dialogue_number
+        history_messages = [
+            [record.get_human_message(), record.get_ai_message()]
+            for record in history_chat_record[start_index:]
+        ]
+        
+        # 3. 构建当前问题消息（包含知识段落）
+        current_message = self.to_human_message(
+            prompt, problem_text, max_paragraph_char_number, paragraph_list
+        )
+        
+        # 4. 组装完整消息列表
+        return [
+            SystemMessage(system_prompt),
+            *flat_map(history_messages),  # 展平历史对话
+            current_message
+        ]
+```
+
+##### 步骤4: 模型对话（核心）
+
+**文件**: `application/chat_pipeline/step/chat_step/impl/base_chat_step.py`
+
+```python
+class BaseChatStep(IChatStep):
+    """
+    模型对话步骤 - 核心步骤
+    
+    功能:
+    - 调用模型进行对话
+    - 支持流式和非流式输出
+    - 处理工具调用（MCP）
+    - 统计 Token 消耗
+    
+    输入:
+    - message_list: 消息列表
+    - model_id: 模型ID
+    - stream: 是否流式输出
+    - chat_id: 对话ID
+    - post_response_handler: 后置处理器
+    
+    输出:
+    - chat_result: 对话结果（流式响应或完整响应）
+    """
+    
+    def execute(self, message_list, chat_id, problem_text,
+                post_response_handler, model_id, workspace_id,
+                paragraph_list, manage, stream=True, ...):
+        """
+        执行对话
+        
+        Returns:
+            StreamingHttpResponse 或 dict
+        """
+        # 1. 获取模型实例
+        chat_model = get_model_instance_by_model_workspace_id(
+            model_id, workspace_id, **model_params_setting
+        ) if model_id else None
+        
+        # 2. 根据流式标志选择执行方式
+        if stream:
+            return self.execute_stream(
+                message_list, chat_id, problem_text,
+                post_response_handler, chat_model, paragraph_list, manage, ...
+            )
+        else:
+            return self.execute_block(...)
+    
+    def execute_stream(self, message_list, chat_id, problem_text,
+                      post_response_handler, chat_model, paragraph_list,
+                      manage, ...):
+        """
+        流式对话执行
+        
+        Returns:
+            StreamingHttpResponse: SSE 格式的流式响应
+        """
+        # 1. 获取流式结果
+        chat_result, is_ai_chat = self.get_stream_result(
+            message_list, chat_model, paragraph_list, ...
+        )
+        
+        # 2. 生成对话记录ID
+        chat_record_id = uuid.uuid7()
+        
+        # 3. 创建流式响应
+        response = StreamingHttpResponse(
+            streaming_content=event_content(
+                chat_result, chat_id, chat_record_id,
+                paragraph_list, post_response_handler,
+                manage, self, ...
+            ),
+            content_type='text/event-stream'
+        )
+        
+        return response
+    
+    def get_stream_result(self, message_list, chat_model, paragraph_list, ...):
+        """
+        获取流式对话结果
+        
+        Returns:
+            Iterator[AIMessageChunk]: 模型输出的流
+            bool: 是否是 AI 对话
+        """
+        if chat_model is None:
+            return iter([AIMessageChunk("模型未配置")]), False
+        
+        # 处理 MCP 工具调用
+        mcp_result = self._handle_mcp_request(...)
+        if mcp_result:
+            return mcp_result, True
+        
+        # 调用模型流式接口
+        return chat_model.stream(message_list), True
+
+
+def event_content(response, chat_id, chat_record_id, paragraph_list,
+                 post_response_handler, manage, step, ...):
+    """
+    事件内容生成器 - 处理流式响应
+    
+    功能:
+    - 逐块读取模型输出
+    - 格式化为 SSE 事件
+    - 统计 Token
+    - 保存对话记录
+    
+    Yields:
+        str: SSE 格式的事件字符串
+    """
+    all_text = ''
+    reasoning_content = ''
+    
+    try:
+        # 1. 逐块处理模型输出
+        for chunk in response:
+            # 提取内容和推理内容
+            content_chunk = extract_content(chunk)
+            reasoning_chunk = extract_reasoning_content(chunk)
+            
+            all_text += content_chunk
+            reasoning_content += reasoning_chunk
+            
+            # 2. 发送 SSE 事件
+            yield manage.base_to_response.to_stream_chunk_response(
+                chat_id, chat_record_id, 'ai-chat-node',
+                [], content_chunk, False, 0, 0,
+                {'reasoning_content': reasoning_content}
+            )
+        
+        # 3. 计算 Token 数量
+        request_token = chat_model.get_num_tokens_from_messages(message_list)
+        response_token = chat_model.get_num_tokens(all_text)
+        
+        # 4. 更新上下文
+        step.context['message_tokens'] = request_token
+        step.context['answer_tokens'] = response_token
+        step.context['answer_text'] = all_text
+        
+        # 5. 调用后置处理器（保存对话记录）
+        post_response_handler.handler(
+            chat_id, chat_record_id, paragraph_list,
+            problem_text, all_text, manage, step, ...
+        )
+        
+        # 6. 发送结束事件
+        yield manage.base_to_response.to_stream_chunk_response(
+            chat_id, chat_record_id, 'ai-chat-node',
+            [], '', True, request_token, response_token,
+            {'node_is_end': True}
+        )
+        
+    except Exception as e:
+        # 错误处理
+        yield error_response(...)
+```
+
+---
+
+## 三、数据流转图
+
+### 3.1 完整对话流程
+
+```
+用户请求
+   ↓
+┌─────────────────────────────┐
+│  ChatSerializers.chat()     │  ← API 入口
+│  - 验证参数                  │
+│  - 获取应用配置              │
+│  - 加载对话历史              │
+└────────────┬────────────────┘
+             ↓
+┌─────────────────────────────┐
+│  判断应用类型                │
+│  ├─ SIMPLE → chat_simple()  │
+│  └─ WORKFLOW → chat_workflow()│
+└────────────┬────────────────┘
+             ↓
+┌─────────────────────────────┐
+│  构建 PipelineManage         │
+│  PipelineManage.builder()   │
+│    .append_step(ResetStep)  │  ← 可选
+│    .append_step(SearchStep) │  ← 可选
+│    .append_step(MessageStep)│
+│    .append_step(ChatStep)   │
+│    .build()                 │
+└────────────┬────────────────┘
+             ↓
+┌─────────────────────────────┐
+│  pipeline.run(context)      │  ← 执行流水线
+│                             │
+│  Step 1: ResetProblem       │
+│  └─ 优化问题                 │
+│     ↓                       │
+│  Step 2: SearchDataset      │
+│  └─ 检索知识                 │
+│     ↓                       │
+│  Step 3: GenerateMessage    │
+│  └─ 构建消息列表             │
+│     ↓                       │
+│  Step 4: Chat               │
+│  └─ 调用模型对话             │
+│     ├─ 获取模型实例          │
+│     ├─ chat_model.stream()  │
+│     ├─ 处理流式输出          │
+│     └─ 保存对话记录          │
+└────────────┬────────────────┘
+             ↓
+┌─────────────────────────────┐
+│  StreamingHttpResponse      │  ← 返回 SSE 流
+│  Content-Type:              │
+│    text/event-stream        │
+└─────────────────────────────┘
+```
+
+### 3.2 上下文数据传递
+
+```python
+# PipelineManage.context 在各步骤间传递的数据
+
+context = {
+    # 输入参数
+    'problem_text': '用户问题',
+    'chat_id': 'uuid',
+    'model_id': 'uuid',
+    'workspace_id': 'uuid',
+    'stream': True,
+    'chat_user_id': 'user123',
+    'chat_user_type': 'CHAT_USER',
+    
+    # Step 1: ResetProblem 输出
+    'padding_problem_text': '优化后的问题',
+    
+    # Step 2: SearchDataset 输出
+    'paragraph_list': [
+        {
+            'id': 'uuid',
+            'content': '知识段落内容',
+            'title': '标题',
+            'similarity': 0.95,
+            ...
+        }
+    ],
+    
+    # Step 3: GenerateMessage 输出
+    'message_list': [
+        SystemMessage(...),
+        HumanMessage(...),
+        AIMessage(...),
+        ...
+    ],
+    
+    # Step 4: Chat 输出
+    'chat_result': StreamingHttpResponse,
+    'message_tokens': 100,
+    'answer_tokens': 200,
+    'answer_text': '完整回答',
+    'run_time': 2.5,
+}
+```
+
+---
+
+## 四、关键设计要点
+
+### 4.1 扩展新模型提供商的步骤
+
+1. **创建目录结构**:
+```
+models_provider/impl/xxx_model_provider/
+├── xxx_model_provider.py    # 提供商类
+├── model/
+│   ├── llm.py               # LLM 模型
+│   ├── embedding.py         # Embedding 模型
+│   └── ...
+└── credential/
+    ├── llm.py               # LLM 凭证验证
+    └── ...
+```
+
+2. **实现凭证验证**:
+```python
+class XXXLLMCredential(BaseModelCredential):
+    def is_valid(self, ...):
+        # 验证 API Key 等
+        pass
+    
+    def encryption_dict(self, model_info):
+        # 加密敏感字段
+        pass
+```
+
+3. **实现模型类**:
+```python
+class XXXChatModel(MaxKBBaseModel, BaseXXXModel):
+    @staticmethod
+    def new_instance(model_type, model_name, model_credential, **kwargs):
+        optional_params = MaxKBBaseModel.filter_optional_params(kwargs)
+        return XXXChatModel(
+            model=model_name,
+            api_key=model_credential.get('api_key'),
+            streaming=kwargs.get('streaming', True),
+            ...
+        )
+```
+
+4. **实现提供商类**:
+```python
+class XXXModelProvider(IModelProvider):
+    def get_model_info_manage(self):
+        return (ModelInfoManage.Builder()
+            .append_model_info_list([...])
+            .build())
+    
+    def get_model_provide_info(self):
+        return {'provider': 'xxx', 'name': 'XXX', 'icon': '...'}
+```
+
+5. **注册提供商**:
+```python
+# models_provider/constants/model_provider_constants.py
+from models_provider.impl.xxx_model_provider.xxx_model_provider import XXXModelProvider
+
+class ModelProvideConstants(Enum):
+    model_xxx_provider = XXXModelProvider()
+```
+
+### 4.2 自定义对话流水线
+
+```python
+# 简单对话（无知识库）
+pipeline = (PipelineManage.builder()
+    .append_step(BaseGenerateHumanMessageStep)
+    .append_step(BaseChatStep)
+    .build())
+
+# RAG 对话（带知识库）
+pipeline = (PipelineManage.builder()
+    .append_step(BaseResetProblemStep)      # 问题优化
+    .append_step(BaseSearchDatasetStep)      # 知识检索
+    .append_step(BaseGenerateHumanMessageStep)
+    .append_step(BaseChatStep)
+    .build())
+
+# 自定义步骤
+class MyCustomStep(IBaseChatPipelineStep):
+    def _run(self, manage):
+        # 自定义逻辑
+        result = self.execute(**manage.context)
+        manage.context['my_result'] = result
+
+pipeline = (PipelineManage.builder()
+    .append_step(MyCustomStep)
+    .append_step(BaseChatStep)
+    .build())
+```
+
+### 4.3 响应格式化
+
+```python
+# 系统默认格式
+class SystemToResponse(BaseToResponse):
+    def to_stream_chunk_response(self, chat_id, record_id, node_id,
+                                 paragraph_list, content, is_end,
+                                 request_token, answer_token, other):
+        return f"data: {json.dumps({...})}\n\n"
+
+# OpenAI 兼容格式
+class OpenaiToResponse(BaseToResponse):
+    def to_stream_chunk_response(self, ...):
+        return f"data: {json.dumps({'choices': [{'delta': {...}}]})}\n\n"
+
+# 使用时指定
+pipeline = (PipelineManage.builder()
+    .add_base_to_response(OpenaiToResponse())  # 使用 OpenAI 格式
+    .build())
+```
+
+---
+
+## 五、依赖关系
+
+### 5.1 核心依赖
+
+```txt
+# Python 依赖
+langchain>=0.1.0
+langchain-openai>=0.1.0
+pydantic>=2.0
+django>=5.0
+djangorestframework>=3.14
+psycopg2-binary>=2.9  # PostgreSQL
+redis>=5.0            # 缓存
+celery>=5.3           # 异步任务
+tiktoken>=0.5         # Token 计数
+```
+
+### 5.2 模块依赖关系
+
+```
+chat_pipeline/
+  └─ depends on → models_provider/
+       └─ depends on → langchain
+            └─ depends on → 各厂商 SDK (openai, ollama, etc.)
+
+common/
+  ├─ utils/ (工具函数)
+  ├─ exception/ (异常定义)
+  └─ handle/ (响应处理)
+```
+
+---
+
+## 六、数据库模型（简化版）
+
+### 6.1 模型配置表
+
+```python
+# models_provider/models.py
+class Model(models.Model):
+    id = UUIDField(primary_key=True)
+    name = CharField(max_length=256)          # 模型名称
+    model_type = CharField(max_length=64)     # LLM/EMBEDDING/...
+    model_name = CharField(max_length=256)    # 具体模型（gpt-4, ...）
+    provider = CharField(max_length=256)      # 提供商（openai, ollama, ...）
+    credential = TextField()                  # 加密的凭证（JSON）
+    status = CharField(max_length=64)         # VALID/ERROR/DOWNLOAD
+    workspace_id = UUIDField()                # 工作空间ID
+    model_params_setting = JSONField()        # 模型参数配置
+```
+
+### 6.2 对话记录表
+
+```python
+# application/models/application_chat.py
+class Chat(models.Model):
+    id = UUIDField(primary_key=True)
+    application_id = UUIDField()
+    abstract = CharField(max_length=1024)     # 对话摘要
+    chat_user_id = CharField(max_length=128)
+    chat_user_type = CharField(max_length=64)
+
+class ChatRecord(models.Model):
+    id = UUIDField(primary_key=True)
+    chat = ForeignKey(Chat)
+    problem_text = CharField(max_length=10240)  # 问题
+    answer_text = CharField(max_length=40960)   # 答案
+    message_tokens = IntegerField()             # 请求 Token
+    answer_tokens = IntegerField()              # 响应 Token
+    details = JSONField()                       # 对话详情
+    run_time = FloatField()                     # 运行时长
+    index = IntegerField()                      # 对话序号
+```
+
+---
+
+## 七、API 接口设计
+
+### 7.1 模型管理 API
+
+```python
+# 获取模型提供商列表
+GET /api/model/provider/list
+
+# 获取某提供商的模型列表
+GET /api/model/provider/{provider}/model/list?model_type=LLM
+
+# 验证模型凭证
+POST /api/model/provider/{provider}/valid
+{
+    "model_type": "LLM",
+    "model_name": "gpt-4",
+    "model_credential": {
+        "api_key": "sk-...",
+        "api_base": "https://..."
+    }
+}
+
+# 创建模型
+POST /api/model
+{
+    "name": "我的GPT4",
+    "model_type": "LLM",
+    "model_name": "gpt-4",
+    "provider": "model_openai_provider",
+    "credential": {...},
+    "workspace_id": "uuid"
+}
+```
+
+### 7.2 对话 API
+
+```python
+# 简单对话（流式）
+POST /api/chat/{chat_id}/chat
+Content-Type: application/json
+
+{
+    "message": "你好",
+    "stream": true,
+    "re_chat": false,
+    "form_data": {}
+}
+
+Response: text/event-stream
+data: {"content": "你", "is_end": false}
+data: {"content": "好", "is_end": false}
+data: {"content": "", "is_end": true, "request_token": 10, "answer_token": 5}
+
+# OpenAI 兼容接口
+POST /api/application/{app_id}/chat/openai
+{
+    "messages": [
+        {"role": "user", "content": "你好"}
+    ],
+    "stream": true
+}
+```
+
+---
+
+## 八、实现清单
+
+### Phase 1: 基础框架
+- [ ] 实现 `base_model_provider.py` 中的抽象类
+- [ ] 实现 `ModelInfoManage` 和 Builder
+- [ ] 实现 `PipelineManage` 和 Builder
+- [ ] 实现 `IBaseChatPipelineStep` 基类
+
+### Phase 2: 第一个模型提供商（OpenAI）
+- [ ] 实现 `OpenAILLMCredential`
+- [ ] 实现 `OpenAIChatModel`
+- [ ] 实现 `OpenAIModelProvider`
+- [ ] 注册到 `ModelProvideConstants`
+
+### Phase 3: 对话步骤
+- [ ] 实现 `BaseGenerateHumanMessageStep`
+- [ ] 实现 `BaseChatStep`（流式和非流式）
+- [ ] 实现 `event_content` 生成器
+- [ ] 实现响应格式化器（SystemToResponse）
+
+### Phase 4: 集成测试
+- [ ] 测试模型实例创建
+- [ ] 测试简单对话流程
+- [ ] 测试流式输出
+- [ ] 测试 Token 统计
+
+### Phase 5: 扩展（可选）
+- [ ] 实现问题优化步骤
+- [ ] 实现知识检索步骤
+- [ ] 实现更多模型提供商（Ollama、文心一言等）
+- [ ] 实现 OpenAI 兼容接口
+
+---
+
+## 九、注意事项
+
+1. **线程安全**: 模型实例应该缓存，避免重复创建
+2. **异常处理**: 所有外部调用（API、数据库）都要有异常处理
+3. **日志记录**: 关键步骤要记录日志，便于调试
+4. **Token 统计**: 准确统计输入输出 Token，用于计费
+5. **流式响应**: 使用 SSE (Server-Sent Events) 格式
+6. **凭证加密**: API Key 等敏感信息必须加密存储
+7. **超时控制**: 模型调用要设置超时时间
+8. **重试机制**: 网络失败时要有重试逻辑
+
+---
+
+## 十、参考文件路径
+
+```
+# 核心文件（需要阅读和理解）
+apps/models_provider/base_model_provider.py          # 模型抽象
+apps/models_provider/tools.py                        # 工具函数
+apps/models_provider/impl/openai_model_provider/     # OpenAI 示例
+apps/application/chat_pipeline/pipeline_manage.py    # 流水线管理
+apps/application/chat_pipeline/I_base_chat_pipeline.py  # 步骤接口
+apps/application/chat_pipeline/step/chat_step/impl/base_chat_step.py  # 对话步骤
+apps/common/handle/base_to_response.py               # 响应处理
+
+# 辅助文件
+apps/models_provider/constants/model_provider_constants.py  # 提供商注册
+apps/application/serializers/common.py                 # 序列化器
+apps/chat/serializers/chat.py                          # 对话 API
+```
+
+---
+
+这份文档涵盖了从模型接入到对话执行的完整架构设计。按照这个设计实现，可以得到一个灵活、可扩展的模型对话系统。
