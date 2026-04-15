@@ -152,7 +152,7 @@ def extract_reasoning_content(chunk):
 
 def error_response(chat_id, chat_record_id, error_message):
     import json
-    return f"data: {json.dumps({
+    data = {
         'chat_id': str(chat_id),
         'record_id': str(chat_record_id),
         'node_id': 'ai-chat-node',
@@ -162,4 +162,5 @@ def error_response(chat_id, chat_record_id, error_message):
         'request_token': 0,
         'answer_token': 0,
         'other': {'error': error_message}
-    })}\n\n"
+    }
+    return f"data: {json.dumps(data)}\n\n"

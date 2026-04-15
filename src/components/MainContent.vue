@@ -2,18 +2,36 @@
   <div class="main-content">
     <div class="conversation-container">
       <div class="conversation-header">
-        <h2 class="conversation-title">与模型对话</h2>
+        <div class="conversation-title">
+          <div class="model-select-container">
+            <span class="model-label">模型</span>
+            <el-select 
+              v-model="selectedModel" 
+              placeholder="选择模型" 
+              size="small"
+              class="model-select"
+              popper-class="model-select-dropdown"
+            >
+              <el-option
+                v-for="model in models"
+                :key="model.id"
+                :label="model.name"
+                :value="model.id"
+              />
+            </el-select>
+          </div>
+        </div>
         <div class="conversation-actions">
-          <el-select v-model="selectedModel" placeholder="选择模型" size="small">
-            <el-option
-              v-for="model in models"
-              :key="model.id"
-              :label="model.name"
-              :value="model.id"
-            />
-          </el-select>
-          <el-button type="text" icon="Edit" />
-          <el-button type="text" icon="More" />
+          <el-tooltip content="导出对话" placement="bottom">
+            <el-button type="text" class="icon-button" @click="exportConversation">
+              <el-icon><Download /></el-icon>
+            </el-button>
+          </el-tooltip>
+          <el-tooltip content="清空对话" placement="bottom">
+            <el-button type="text" class="icon-button" @click="clearConversation">
+              <el-icon><Delete /></el-icon>
+            </el-button>
+          </el-tooltip>
         </div>
       </div>
       <div class="conversation-body">
@@ -22,41 +40,32 @@
           :key="index"
           :class="message.role === 'user' ? 'user-message' : 'ai-message'"
         >
-          <div class="message-card" :class="message.role === 'user' ? 'user-card' : 'ai-card'">
-            <div v-if="message.role === 'assistant'" class="ai-avatar">
-              <el-avatar size="small" :src="aiAvatar" />
+          <!-- 用户消息 -->
+          <div v-if="message.role === 'user'" class="user-message-wrapper">
+            <div class="user-message-card">
+              <div class="user-message-content">{{ message.content }}</div>
             </div>
-            <div v-if="message.role === 'assistant'" class="ai-content-wrapper">
+          </div>
+          
+          <!-- AI消息 -->
+          <div v-else class="ai-message-wrapper">
+            <div class="ai-message-content-wrapper">
               <div v-if="message.status === 'loading'" class="ai-thinking">
                 <span>Thinking...</span>
                 <div class="progress-bar">
-                  <div class="progress-fill" :style="{ width: '60%' }"></div>
+                  <div class="progress-fill"></div>
                 </div>
               </div>
-              <div v-else class="ai-content">
-                <p v-for="(line, lineIndex) in message.content.split('\n')" :key="lineIndex" v-if="line && line.trim()">
-                  {{ line }}
-                </p>
+              <div v-else class="ai-message-content">
+                {{ message.content }}
               </div>
               <div class="ai-footer">
-                <el-button type="text" size="small" class="thinking-button">
-                  <el-icon><Star /></el-icon> Helpful
+                <el-button type="text" size="small" class="ai-footer-button" @click="copyMessage(message.content)">
+                  Copy
                 </el-button>
-                <el-button type="text" size="small">
-                  <el-icon><Refresh /></el-icon>
+                <el-button type="text" size="small" class="ai-footer-button">
+                  <el-icon><Refresh /></el-icon> Regenerate
                 </el-button>
-              </div>
-            </div>
-            <div v-else class="message-content">
-              {{ message.content }}
-            </div>
-            <div v-if="message.role === 'assistant'" class="ai-graph">
-              <div class="graph-placeholder">
-                <div class="graph-node main-node"></div>
-                <div class="graph-node secondary-node"></div>
-                <div class="graph-node secondary-node"></div>
-                <div class="graph-node secondary-node"></div>
-                <div class="graph-node secondary-node"></div>
               </div>
             </div>
           </div>
@@ -94,10 +103,10 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
-import { Message, ArrowRight, Edit, More, Paperclip, Star, Refresh, ArrowUp, Plus, ChatLineRound, Microphone } from '@element-plus/icons-vue'
+import { Message, ArrowRight, Edit, More, Paperclip, Star, Refresh, ArrowUp, Plus, ChatLineRound, Microphone, CircleCheck, Download, Delete } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 const messageInput = ref('')
-const aiAvatar = 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=AI%20assistant%20icon%20blue%20simple&image_size=square'
 const messages = ref([])
 const models = ref([])
 const selectedModel = ref('')
@@ -106,12 +115,12 @@ const chatId = ref('00000000-0000-0000-0000-000000000000')
 
 const isSendButtonDisabled = computed(() => {
   const result = !messageInput.value || !messageInput.value.trim() || !selectedModel.value || isLoading.value
-  console.log('isSendButtonDisabled:', result)
-  console.log('messageInput.value:', messageInput.value)
-  console.log('messageInput.value.trim():', messageInput.value ? messageInput.value.trim() : 'undefined')
-  console.log('selectedModel.value:', selectedModel.value)
-  console.log('isLoading.value:', isLoading.value)
   return result
+})
+
+const currentModelName = computed(() => {
+  const model = models.value.find(m => m.id === selectedModel.value)
+  return model ? model.name : '请选择模型'
 })
 
 onMounted(() => {
@@ -147,12 +156,12 @@ const sendMessage = async () => {
     content: userMessage
   })
   
-  const aiMessageIndex = messages.value.length
   messages.value.push({
     role: 'assistant',
     content: '',
     status: 'loading'
   })
+  const aiMessageIndex = messages.value.length - 1
   
   messageInput.value = ''
   isLoading.value = true
@@ -202,18 +211,20 @@ const sendMessage = async () => {
               try {
                 const json = JSON.parse(data)
                 console.log('解析后的JSON:', json)
-                if (json.content) {
+                if (json.content && json.content.trim()) {
                   fullContent += json.content
                   console.log('当前完整内容:', fullContent)
+                  // 实时更新消息内容
                   messages.value[aiMessageIndex] = {
                     ...messages.value[aiMessageIndex],
                     content: fullContent,
-                    status: json.is_end ? 'completed' : 'loading'
+                    status: 'loading'
                   }
                 }
                 if (json.is_end) {
                   messages.value[aiMessageIndex] = {
                     ...messages.value[aiMessageIndex],
+                    content: fullContent,
                     status: 'completed'
                   }
                 }
@@ -243,6 +254,52 @@ const sendMessage = async () => {
     isLoading.value = false
   }
 }
+
+// 导出对话功能
+const exportConversation = () => {
+  const conversationText = messages.value.map(msg => {
+    const role = msg.role === 'user' ? '用户' : 'AI'
+    return `${role}: ${msg.content}`
+  }).join('\n\n')
+  
+  const blob = new Blob([conversationText], { type: 'text/plain' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `conversation_${new Date().toISOString().slice(0, 10)}.txt`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+// 清空对话功能
+const clearConversation = () => {
+  ElMessageBox.confirm('确定要清空对话吗？', '提示', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(() => {
+    messages.value = []
+  }).catch(() => {
+    // 取消操作，不做任何处理
+  })
+}
+
+// 复制消息功能
+const copyMessage = (content) => {
+  navigator.clipboard.writeText(content).then(() => {
+    ElMessage({
+      message: '复制成功',
+      type: 'success',
+      position: 'top-right',
+      duration: 2500,
+      showIcon: true
+    })
+  }).catch(err => {
+    console.error('复制失败:', err)
+  })
+}
 </script>
 
 <style scoped>
@@ -271,209 +328,207 @@ const sendMessage = async () => {
 
 .conversation-title {
   font-size: 16px;
-  font-weight: 500;
+  font-weight: 600;
   margin: 0;
   color: #1f2937;
   transition: color 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.model-select-container {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.model-label {
+  font-size: 14px;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+.model-select {
+  border-radius: 8px !important;
+  background-color: #ffffff !important;
+  border: 1px solid #e5e7eb !important;
+  min-width: 120px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+}
+
+:deep(.model-select .el-select__wrapper) {
+  box-shadow: none !important;
+  border: 1px solid #e5e7eb !important;
+  background-color: #ffffff !important;
+  border-radius: 8px !important;
+  padding: 2px 8px !important;
+}
+
+:deep(.model-select .el-select__input) {
+  font-size: 14px !important;
+  color: #1f2937 !important;
+}
+
+:deep(.model-select .el-select__caret) {
+  color: #6b7280 !important;
+  font-size: 12px !important;
+  transition: all 0.3s ease;
+}
+
+:deep(.model-select:hover .el-select__caret) {
+  color: #409EFF !important;
+}
+
+:deep(.model-select-dropdown) {
+  border-radius: 8px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  border: 1px solid #e5e7eb !important;
+}
+
+:deep(.model-select-dropdown .el-option) {
+  font-size: 14px !important;
+  padding: 8px 12px !important;
+}
+
+:deep(.model-select-dropdown .el-option:hover) {
+  background-color: #f3f4f6 !important;
+}
+
+:deep(.model-select-dropdown .el-option.is-selected) {
+  background-color: #e6f7ff !important;
+  color: #409EFF !important;
 }
 
 .conversation-actions {
   display: flex;
+  align-items: center;
   gap: 8px;
 }
 
-.user-message {
-  margin-bottom: 20px;
-}
-
-.ai-message {
-  margin-bottom: 20px;
-}
-
-.message-card {
-  border-radius: 4px;
-  padding: 16px;
-  position: relative;
-  background-color: #ffffff;
-  border: 1px solid #e5e7eb;
-  transition: background-color 0.3s ease, border-color 0.3s ease;
-}
-
-.user-card {
+.icon-button {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 50%;
   background-color: #f3f4f6;
-  border: none;
-  transition: background-color 0.3s ease;
-}
-
-.ai-card {
+  color: #6b7280;
   display: flex;
-  gap: 16px;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  padding: 0;
 }
 
-.ai-avatar {
-  flex-shrink: 0;
-  margin-top: 4px;
+.icon-button:hover {
+  background-color: #e5e7eb;
+  color: #111827;
 }
 
-.ai-content-wrapper {
+.icon-button .el-icon {
+  font-size: 16px;
+}
+
+/* 用户消息样式 */
+.user-message-wrapper {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 20px;
+}
+
+.user-message-card {
+  max-width: 70%;
+  background-color: #409EFF;
+  color: white;
+  border-radius: 16px 8px 16px 16px;
+  padding: 12px 16px;
+  position: relative;
+}
+
+.user-message-content {
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* AI消息样式 */
+.ai-message-wrapper {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 20px;
+  max-width: 85%;
+}
+
+.ai-message-content-wrapper {
   flex: 1;
-  display: flex;
-  flex-direction: column;
+  background-color: #f3f4f6;
+  border-radius: 8px 16px 16px 16px;
+  padding: 16px 20px;
+  position: relative;
 }
 
 .ai-thinking {
-  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .ai-thinking span {
-  display: block;
-  margin-bottom: 8px;
   color: #6b7280;
-  transition: color 0.3s ease;
+  font-size: 14px;
 }
 
 .progress-bar {
-  width: 100%;
+  width: 60px;
   height: 4px;
   background-color: #e5e7eb;
   border-radius: 2px;
   overflow: hidden;
-  transition: background-color 0.3s ease;
 }
 
 .progress-fill {
   height: 100%;
   background-color: #409EFF;
   border-radius: 2px;
+  animation: loading 1.5s ease-in-out infinite;
 }
 
-.ai-content {
-  margin-bottom: 16px;
-  flex: 1;
+@keyframes loading {
+  0% {
+    width: 0%;
+  }
+  50% {
+    width: 100%;
+  }
+  100% {
+    width: 0%;
+  }
 }
 
-.ai-content h3 {
+.ai-message-content {
   font-size: 14px;
-  font-weight: 500;
-  margin: 16px 0 8px 0;
+  line-height: 1.7;
   color: #1f2937;
-  transition: color 0.3s ease;
-}
-
-.ai-content h4 {
-  font-size: 13px;
-  font-weight: 500;
-  margin: 12px 0 6px 0;
-  color: #1f2937;
-  transition: color 0.3s ease;
-}
-
-.ai-content p {
-  margin: 8px 0;
-  line-height: 1.5;
-  color: #1f2937;
-  transition: color 0.3s ease;
-}
-
-.ai-content ul {
-  margin: 8px 0;
-  padding-left: 20px;
-}
-
-.ai-content li {
-  margin: 4px 0;
-  color: #1f2937;
-  line-height: 1.4;
-  transition: color 0.3s ease;
-}
-
-.ai-content .link {
-  color: #409EFF;
-  text-decoration: none;
-  transition: color 0.3s ease;
-}
-
-.ai-content .link:hover {
-  text-decoration: underline;
+  margin-bottom: 12px;
 }
 
 .ai-footer {
-  margin-top: 16px;
   display: flex;
-  gap: 12px;
+  gap: 16px;
+  margin-top: 8px;
 }
 
-.thinking-button {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+.ai-footer-button {
+  font-size: 12px;
+  color: #409EFF !important;
+  padding: 0 !important;
 }
 
-.ai-graph {
-  flex-shrink: 0;
-  width: 120px;
-  height: 120px;
-  background-color: #f8f9fa;
-  border-radius: 4px;
-  border: 1px solid #e5e7eb;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color 0.3s ease, border-color 0.3s ease;
+.ai-footer-button .el-icon {
+  font-size: 12px;
+  margin-right: 4px;
 }
 
-.graph-placeholder {
-  position: relative;
-  width: 100px;
-  height: 100px;
-}
-
-.graph-node {
-  position: absolute;
-  border-radius: 50%;
-  border: 2px solid #409EFF;
-}
-
-.main-node {
-  width: 24px;
-  height: 24px;
-  background-color: #409EFF;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-}
-
-.secondary-node {
-  width: 16px;
-  height: 16px;
-  background-color: #ffffff;
-  transition: background-color 0.3s ease;
-}
-
-.secondary-node:nth-child(2) {
-  top: 20%;
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-.secondary-node:nth-child(3) {
-  top: 50%;
-  left: 20%;
-  transform: translateY(-50%);
-}
-
-.secondary-node:nth-child(4) {
-  top: 50%;
-  right: 20%;
-  transform: translateY(-50%);
-}
-
-.secondary-node:nth-child(5) {
-  bottom: 20%;
-  left: 50%;
-  transform: translateX(-50%);
-}
-
+/* 消息输入容器 */
 .message-input-container {
   padding: 20px 16px;
   border-top: 1px solid #e5e7eb;
@@ -608,6 +663,26 @@ const sendMessage = async () => {
   color: #c0c4cc;
 }
 
+/* 自定义ElMessage样式 */
+:deep(.el-message) {
+  background-color: #FFFFFF !important;
+  color: #1f2937 !important;
+  font-size: 14px !important;
+  border-radius: 12px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  border: none !important;
+  padding: 12px 16px !important;
+}
+
+:deep(.el-message__icon) {
+  color: #10b981 !important;
+  font-size: 18px !important;
+}
+
+:deep(.el-message--success .el-message__icon) {
+  color: #10b981 !important;
+}
+
 /* 深色主题样式 */
 :deep(.dark .main-content) {
   background-color: #0f172a;
@@ -618,67 +693,129 @@ const sendMessage = async () => {
   color: #f3f4f6;
 }
 
-:deep(.dark .main-content .message-card) {
-  background-color: #1e293b;
-  border: 1px solid #334155;
-}
-
-:deep(.dark .main-content .user-card) {
-  background-color: #334155;
-  border: none;
-}
-
-:deep(.dark .main-content .ai-thinking span) {
+:deep(.dark .main-content .model-label) {
   color: #9ca3af;
 }
 
+:deep(.dark .main-content .model-select) {
+  background-color: #1e293b !important;
+  border: 1px solid #333a47 !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+}
+
+:deep(.dark .main-content .model-select .el-select__wrapper) {
+  background-color: #1e293b !important;
+  border: 1px solid #333a47 !important;
+}
+
+:deep(.dark .main-content .model-select .el-select__input) {
+  color: #409EFF !important;
+}
+
+:deep(.dark .main-content .model-select .el-select__caret) {
+  color: #409EFF !important;
+}
+
+:deep(.dark .main-content .model-select:hover .el-select__caret) {
+  color: #66b1ff !important;
+}
+
+:deep(.dark .main-content .model-select-dropdown) {
+  background-color: #1e293b !important;
+  border: 1px solid #333a47 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+}
+
+:deep(.dark .main-content .model-select-dropdown .el-option) {
+  color: #f1f5f9 !important;
+}
+
+:deep(.dark .main-content .model-select-dropdown .el-option:hover) {
+  background-color: #333a47 !important;
+}
+
+:deep(.dark .main-content .model-select-dropdown .el-option.is-selected) {
+  background-color: #1e40af !important;
+  color: #f1f5f9 !important;
+}
+
+:deep(.dark .main-content .icon-button) {
+  background-color: #1e293b;
+  color: #409EFF;
+  border: 1px solid #333a47;
+}
+
+:deep(.dark .main-content .icon-button:hover) {
+  background-color: #333a47;
+  color: #66b1ff;
+}
+
+:deep(.dark .main-content .user-message-card) {
+  background-color: #409EFF;
+}
+
+:deep(.dark .main-content .ai-message-content-wrapper) {
+  background-color: #1e293b;
+  border-radius: 8px 16px 16px 16px;
+  padding: 16px 20px;
+}
+
+:deep(.dark .main-content .ai-thinking span) {
+  color: #94a3b8;
+}
+
 :deep(.dark .main-content .progress-bar) {
-  background-color: #374151;
+  background-color: #333a47;
 }
 
-:deep(.dark .main-content .ai-content h3) {
-  color: #f3f4f6;
+:deep(.dark .main-content .progress-fill) {
+  background-color: #409EFF;
 }
 
-:deep(.dark .main-content .ai-content h4) {
-  color: #f3f4f6;
+:deep(.dark .main-content .ai-message-content) {
+  color: #f1f5f9;
+  font-size: 14px;
+  line-height: 1.7;
+  margin-bottom: 12px;
 }
 
-:deep(.dark .main-content .ai-content p) {
-  color: #f3f4f6;
+:deep(.dark .main-content .ai-footer) {
+  background-color: #333a47;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-top: 12px;
+  display: flex;
+  gap: 16px;
 }
 
-:deep(.dark .main-content .ai-content li) {
-  color: #f3f4f6;
+:deep(.dark .main-content .ai-footer-button) {
+  color: #409EFF !important;
+  font-size: 12px;
+  padding: 0 !important;
 }
 
-:deep(.dark .main-content .ai-graph) {
-  background-color: #1e293b;
-  border: 1px solid #334155;
-}
-
-:deep(.dark .main-content .secondary-node) {
-  background-color: #1e293b;
+:deep(.dark .main-content .ai-footer-button:hover) {
+  color: #66b1ff !important;
 }
 
 :deep(.dark .main-content .message-input-container) {
-  border-top: 1px solid #374151;
+  border-top: 1px solid #333a47;
   background-color: #0f172a;
 }
 
 :deep(.dark .main-content .input-wrapper) {
-  border: 1px solid #334155;
+  border: 1px solid #333a47;
   background-color: #1e293b;
 }
 
 :deep(.dark .main-content .input-wrapper:focus-within) {
-  border-color: #60a5fa;
-  box-shadow: 0 2px 12px rgba(96, 165, 250, 0.12);
+  border-color: #409EFF;
+  box-shadow: 0 2px 12px rgba(64, 158, 255, 0.12);
 }
 
 :deep(.dark .main-content .add-button) {
-  background-color: #334155;
-  color: #f3f4f6;
+  background-color: #333a47;
+  color: #f1f5f9;
 }
 
 :deep(.dark .main-content .add-button:hover) {
@@ -687,18 +824,29 @@ const sendMessage = async () => {
 }
 
 :deep(.dark .main-content .message-input::placeholder) {
-  color: #6b7280;
+  color: #94a3b8;
 }
 
 :deep(.dark .main-content .send-button) {
-  color: #60a5fa;
+  color: #409EFF;
 }
 
 :deep(.dark .main-content .send-button:hover:not(:disabled)) {
-  color: #93c5fd;
+  color: #66b1ff;
 }
 
 :deep(.dark .main-content .send-button:disabled) {
   color: #64748b !important;
+}
+
+/* 深色主题下的ElMessage样式 */
+:deep(.dark .el-message) {
+  background-color: #1e293b !important;
+  color: #f3f4f6 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+}
+
+:deep(.dark .el-message__icon) {
+  color: #34d399 !important;
 }
 </style>

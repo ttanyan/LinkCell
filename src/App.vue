@@ -114,74 +114,142 @@ const showSettings = ref(false)
 /* 中间主内容区深色主题 */
 .dark .main-content {
   background-color: #0f172a;
-  border-right: 1px solid #374151;
+  border-right: 1px solid #333a47;
 }
 
 .dark .main-content .conversation-title {
-  color: #f3f4f6;
+  color: #f1f5f9;
 }
 
 .dark .main-content .message-card {
   background-color: #1e293b;
-  border: 1px solid #334155;
+  border: 1px solid #333a47;
 }
 
 .dark .main-content .user-card {
-  background-color: #334155;
+  background-color: #409EFF;
   border: none;
 }
 
 .dark .main-content .ai-thinking span {
-  color: #9ca3af;
+  color: #94a3b8;
 }
 
 .dark .main-content .progress-bar {
-  background-color: #374151;
+  background-color: #333a47;
+}
+
+.dark .main-content .progress-fill {
+  background-color: #409EFF;
 }
 
 .dark .main-content .ai-content h3 {
-  color: #f3f4f6;
+  color: #f1f5f9;
 }
 
 .dark .main-content .ai-content h4 {
-  color: #f3f4f6;
+  color: #f1f5f9;
 }
 
 .dark .main-content .ai-content p {
-  color: #f3f4f6;
+  color: #f1f5f9;
 }
 
 .dark .main-content .ai-content li {
-  color: #f3f4f6;
+  color: #f1f5f9;
 }
 
 .dark .main-content .ai-graph {
   background-color: #1e293b;
-  border: 1px solid #334155;
+  border: 1px solid #333a47;
 }
 
 .dark .main-content .secondary-node {
   background-color: #1e293b;
 }
 
+/* 模型选择和操作按钮 */
+.dark .main-content .model-select {
+  background-color: #1e293b !important;
+  border: 1px solid #333a47 !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+}
+
+.dark .main-content .model-select .el-select__wrapper {
+  background-color: #1e293b !important;
+  border: 1px solid #333a47 !important;
+}
+
+.dark .main-content .model-select .el-select__input {
+  color: #409EFF !important;
+}
+
+.dark .main-content .model-select .el-select__caret {
+  color: #409EFF !important;
+}
+
+.dark .main-content .icon-button {
+  background-color: #1e293b;
+  color: #409EFF;
+  border: 1px solid #333a47;
+}
+
+.dark .main-content .icon-button:hover {
+  background-color: #333a47;
+  color: #66b1ff;
+}
+
+/* AI消息样式 */
+.dark .main-content .ai-message-content-wrapper {
+  background-color: #1e293b;
+  border-radius: 8px 16px 16px 16px;
+  padding: 16px 20px;
+}
+
+.dark .main-content .ai-message-content {
+  color: #f1f5f9;
+  font-size: 14px;
+  line-height: 1.7;
+  margin-bottom: 12px;
+}
+
+.dark .main-content .ai-footer {
+  background-color: #333a47;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-top: 12px;
+  display: flex;
+  gap: 16px;
+}
+
+.dark .main-content .ai-footer-button {
+  color: #409EFF !important;
+  font-size: 12px;
+  padding: 0 !important;
+}
+
+.dark .main-content .ai-footer-button:hover {
+  color: #66b1ff !important;
+}
+
 .dark .main-content .message-input-container {
-  border-top: 1px solid #374151;
+  border-top: 1px solid #333a47;
   background-color: #0f172a;
 }
 
 .dark .main-content .input-wrapper {
-  border: 1px solid #334155;
+  border: 1px solid #333a47;
   background-color: #1e293b;
 }
 
 .dark .main-content .input-wrapper:focus-within {
-  border-color: #60a5fa;
-  box-shadow: 0 2px 12px rgba(96, 165, 250, 0.12);
+  border-color: #409EFF;
+  box-shadow: 0 2px 12px rgba(64, 158, 255, 0.12);
 }
 
 .dark .main-content .add-button {
-  background-color: #334155;
-  color: #f3f4f6;
+  background-color: #333a47;
+  color: #f1f5f9;
 }
 
 .dark .main-content .add-button:hover {
@@ -190,15 +258,15 @@ const showSettings = ref(false)
 }
 
 .dark .main-content .message-input::placeholder {
-  color: #6b7280;
+  color: #94a3b8;
 }
 
 .dark .main-content .send-button {
-  color: #60a5fa;
+  color: #409EFF;
 }
 
 .dark .main-content .send-button:hover:not(:disabled) {
-  color: #93c5fd;
+  color: #66b1ff;
 }
 
 .dark .main-content .send-button:disabled {
@@ -207,76 +275,80 @@ const showSettings = ref(false)
 
 /* 右侧侧边栏深色主题 */
 .dark .right-sidebar {
-  background-color: #111827;
+  background-color: #0f172a;
 }
 
 .dark .right-sidebar .memory-logs {
-  border-bottom: 1px solid #374151;
+  border-bottom: 1px solid #333a47;
 }
 
 .dark .right-sidebar .memory-logs::-webkit-scrollbar-track {
-  background: #1f2937;
+  background: #1e293b;
 }
 
 .dark .right-sidebar .memory-logs::-webkit-scrollbar-thumb {
-  background: #4b5563;
+  background: #333a47;
 }
 
 .dark .right-sidebar .memory-logs::-webkit-scrollbar-thumb:hover {
-  background: #6b7280;
+  background: #475569;
 }
 
 .dark .right-sidebar .section-header h3 {
-  color: #f3f4f6;
+  color: #f1f5f9;
 }
 
 .dark .right-sidebar .log-item {
   background-color: #1e293b;
-  border: 1px solid #334155;
+  border: 1px solid #333a47;
 }
 
 .dark .right-sidebar .log-time {
-  color: #9ca3af;
+  color: #94a3b8;
 }
 
 .dark .right-sidebar .log-content {
-  color: #f3f4f6;
+  color: #f1f5f9;
 }
 
 .dark .right-sidebar .link-button {
-  color: #60a5fa;
+  color: #409EFF;
+}
+
+.dark .right-sidebar .link-button:hover {
+  color: #66b1ff;
 }
 
 .dark .right-sidebar .graph-container {
   background-color: #1e293b;
-  border: 1px solid #334155;
+  border: 1px solid #333a47;
 }
 
 /* Element Plus 组件深色主题 */
 .dark {
-  --el-color-primary: #60a5fa;
-  --el-color-success: #34d399;
-  --el-color-warning: #fbbf24;
-  --el-color-danger: #f87171;
-  --el-color-info: #60a5fa;
-  --el-bg-color: #111827;
-  --el-bg-color-page: #111827;
-  --el-bg-color-overlay: #1f2937;
-  --el-text-color-primary: #f3f4f6;
-  --el-text-color-regular: #d1d5db;
-  --el-text-color-secondary: #9ca3af;
-  --el-text-color-placeholder: #6b7280;
-  --el-border-color: #374151;
-  --el-border-color-light: #374151;
-  --el-border-color-lighter: #374151;
-  --el-border-color-extra-light: #374151;
-  --el-fill-color: #1f2937;
-  --el-fill-color-light: #374151;
-  --el-fill-color-lighter: #374151;
-  --el-fill-color-extra-light: #374151;
-  --el-box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
-  --el-box-shadow-light: 0 1px 4px rgba(0, 0, 0, 0.3);
-  --el-box-shadow-lighter: 0 1px 4px rgba(0, 0, 0, 0.3);
-  --el-box-shadow-dark: 0 1px 4px rgba(0, 0, 0, 0.5);
+  --el-color-primary: #409EFF;
+  --el-color-success: #10b981;
+  --el-color-warning: #f59e0b;
+  --el-color-danger: #ef4444;
+  --el-color-info: #409EFF;
+  --el-bg-color: #0f172a;
+  --el-bg-color-page: #0f172a;
+  --el-bg-color-overlay: #1e293b;
+  --el-text-color-primary: #f1f5f9;
+  --el-text-color-regular: #e2e8f0;
+  --el-text-color-secondary: #94a3b8;
+  --el-text-color-placeholder: #64748b;
+  --el-border-color: #333a47;
+  --el-border-color-light: #333a47;
+  --el-border-color-lighter: #333a47;
+  --el-border-color-extra-light: #333a47;
+  --el-fill-color: #1e293b;
+  --el-fill-color-light: #333a47;
+  --el-fill-color-lighter: #333a47;
+  --el-fill-color-extra-light: #333a47;
+  --el-box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  --el-box-shadow-light: 0 2px 4px rgba(0, 0, 0, 0.1);
+  --el-box-shadow-lighter: 0 2px 4px rgba(0, 0, 0, 0.05);
+  --el-box-shadow-dark: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
 </style>

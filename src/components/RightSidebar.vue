@@ -84,8 +84,17 @@ const handleResize = () => {
 const updateChart = () => {
   if (!chart) return
 
+  // 检查是否为暗黑模式
+  const isDarkMode = document.documentElement.classList.contains('dark')
+
   const option = {
-    tooltip: {},
+    tooltip: {
+      backgroundColor: isDarkMode ? '#1e293b' : '#ffffff',
+      borderColor: isDarkMode ? '#333a47' : '#e5e7eb',
+      textStyle: {
+        color: isDarkMode ? '#ffffff' : '#1f2937'
+      }
+    },
     animationDurationUpdate: 1500,
     animationEasingUpdate: 'quinticInOut',
     series: [
@@ -93,11 +102,56 @@ const updateChart = () => {
         type: 'graph',
         layout: 'force',
         data: [
-          { name: 'Project Alpha Docs', symbolSize: 30 },
-          { name: 'API Gateway', symbolSize: 25 },
-          { name: 'Microservices Architecture', symbolSize: 35 },
-          { name: 'Biotechnology', symbolSize: 20 },
-          { name: 'Microservices', symbolSize: 20 }
+          { 
+            name: 'Project Alpha Docs', 
+            symbolSize: 30,
+            itemStyle: {
+              color: isDarkMode ? '#409EFF' : '#3b82f6'
+            },
+            label: {
+              color: isDarkMode ? '#ffffff' : '#000000'
+            }
+          },
+          { 
+            name: 'API Gateway', 
+            symbolSize: 25,
+            itemStyle: {
+              color: isDarkMode ? '#10b981' : '#10b981'
+            },
+            label: {
+              color: isDarkMode ? '#ffffff' : '#000000'
+            }
+          },
+          { 
+            name: 'Microservices Architecture', 
+            symbolSize: 35,
+            itemStyle: {
+              color: isDarkMode ? '#f59e0b' : '#f59e0b'
+            },
+            label: {
+              color: isDarkMode ? '#ffffff' : '#000000'
+            }
+          },
+          { 
+            name: 'Biotechnology', 
+            symbolSize: 20,
+            itemStyle: {
+              color: isDarkMode ? '#8b5cf6' : '#8b5cf6'
+            },
+            label: {
+              color: isDarkMode ? '#ffffff' : '#000000'
+            }
+          },
+          { 
+            name: 'Microservices', 
+            symbolSize: 20,
+            itemStyle: {
+              color: isDarkMode ? '#ef4444' : '#ef4444'
+            },
+            label: {
+              color: isDarkMode ? '#ffffff' : '#000000'
+            }
+          }
         ],
         links: [
           { source: 'Project Alpha Docs', target: 'API Gateway' },
@@ -115,7 +169,8 @@ const updateChart = () => {
         lineStyle: {
           opacity: 0.9,
           width: 2,
-          curveness: 0.1
+          curveness: 0.1,
+          color: isDarkMode ? '#64748b' : '#6b7280'
         },
         force: {
           repulsion: 1000,
@@ -245,48 +300,52 @@ const updateChart = () => {
 
 /* 深色主题样式 */
 :deep(.dark .right-sidebar) {
-  background-color: #111827;
+  background-color: #0f172a;
 }
 
 :deep(.dark .right-sidebar .memory-logs) {
-  border-bottom: 1px solid #374151;
+  border-bottom: 1px solid #333a47;
 }
 
 :deep(.dark .right-sidebar .memory-logs::-webkit-scrollbar-track) {
-  background: #1f2937;
+  background: #1e293b;
 }
 
 :deep(.dark .right-sidebar .memory-logs::-webkit-scrollbar-thumb) {
-  background: #4b5563;
+  background: #333a47;
 }
 
 :deep(.dark .right-sidebar .memory-logs::-webkit-scrollbar-thumb:hover) {
-  background: #6b7280;
+  background: #475569;
 }
 
 :deep(.dark .right-sidebar .section-header h3) {
-  color: #f3f4f6;
+  color: #f1f5f9;
 }
 
 :deep(.dark .right-sidebar .log-item) {
   background-color: #1e293b;
-  border: 1px solid #334155;
+  border: 1px solid #333a47;
 }
 
 :deep(.dark .right-sidebar .log-time) {
-  color: #9ca3af;
+  color: #94a3b8;
 }
 
 :deep(.dark .right-sidebar .log-content) {
-  color: #f3f4f6;
+  color: #f1f5f9;
 }
 
 :deep(.dark .right-sidebar .link-button) {
-  color: #60a5fa;
+  color: #409EFF;
+}
+
+:deep(.dark .right-sidebar .link-button:hover) {
+  color: #66b1ff;
 }
 
 :deep(.dark .right-sidebar .graph-container) {
   background-color: #1e293b;
-  border: 1px solid #334155;
+  border: 1px solid #333a47;
 }
 </style>

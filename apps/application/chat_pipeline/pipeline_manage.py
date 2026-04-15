@@ -48,7 +48,7 @@ class SystemToResponse:
                                paragraph_list, content, is_end, 
                                request_token, answer_token, other):
         import json
-        return f"data: {json.dumps({
+        data = {
             'chat_id': str(chat_id),
             'record_id': str(record_id),
             'node_id': node_id,
@@ -58,4 +58,5 @@ class SystemToResponse:
             'request_token': request_token,
             'answer_token': answer_token,
             'other': other
-        })}\n\n"
+        }
+        return f"data: {json.dumps(data)}\n\n"
