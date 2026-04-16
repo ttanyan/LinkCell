@@ -74,16 +74,19 @@
                   <div class="progress-fill"></div>
                 </div>
               </div>
-              <div v-else class="ai-message-content">
-                {{ message.content }}
+              <div v-else class="ai-message-content" v-html="renderMarkdown(message.content)">
               </div>
               <div class="ai-footer">
-                <el-button type="text" size="small" class="ai-footer-button" @click="copyMessage(message.content)">
-                  Copy
-                </el-button>
-                <el-button type="text" size="small" class="ai-footer-button">
-                  <el-icon><Refresh /></el-icon> Regenerate
-                </el-button>
+                <el-tooltip content="复制内容" placement="top">
+                  <el-button type="text" size="small" class="ai-footer-button" @click="copyMessage(message.content)">
+                    <el-icon><DocumentCopy /></el-icon>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip content="重新生成" placement="top">
+                  <el-button type="text" size="small" class="ai-footer-button">
+                    <el-icon><Refresh /></el-icon>
+                  </el-button>
+                </el-tooltip>
               </div>
             </div>
           </div>
@@ -121,8 +124,9 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
-import { Message, ArrowRight, Edit, More, Paperclip, Star, Refresh, ArrowUp, Plus, ChatLineRound, Microphone, CircleCheck, Download, Delete } from '@element-plus/icons-vue'
+import { Message, ArrowRight, Edit, More, Paperclip, Star, Refresh, ArrowUp, Plus, ChatLineRound, Microphone, CircleCheck, Download, Delete, DocumentCopy } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { marked } from 'marked'
 
 const messageInput = ref('')
 const messages = ref([])
@@ -333,17 +337,73 @@ const clearConversation = () => {
 
 // 复制消息功能
 const copyMessage = (content) => {
-  navigator.clipboard.writeText(content).then(() => {
+  // 优先使用现代的Clipboard API（即使在非HTTPS环境下也尝试使用）
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(content).then(() => {
+      ElMessage({
+        message: '复制成功',
+        type: 'success',
+        position: 'top-right',
+        duration: 2500,
+        showIcon: true
+      })
+    }).catch(err => {
+      console.error('复制失败:', err)
+      // 降级到传统方法
+      fallbackCopyTextToClipboard(content)
+    })
+  } else {
+    // 降级到传统方法
+    fallbackCopyTextToClipboard(content)
+  }
+}
+
+// 传统的复制方法，作为备用
+const fallbackCopyTextToClipboard = (text) => {
+  const textArea = document.createElement('textarea')
+  textArea.value = text
+  
+  // 确保textarea不在可视区域
+  textArea.style.position = 'fixed'
+  textArea.style.left = '-999999px'
+  textArea.style.top = '-999999px'
+  document.body.appendChild(textArea)
+  
+  // 选择并复制内容
+  textArea.focus()
+  textArea.select()
+  
+  try {
+    const successful = document.execCommand('copy')
+    if (successful) {
+      ElMessage({
+        message: '复制成功',
+        type: 'success',
+        position: 'top-right',
+        duration: 2500,
+        showIcon: true
+      })
+    } else {
+      throw new Error('复制命令执行失败')
+    }
+  } catch (err) {
+    console.error('复制失败:', err)
     ElMessage({
-      message: '复制成功',
-      type: 'success',
+      message: '复制失败，请手动复制',
+      type: 'error',
       position: 'top-right',
       duration: 2500,
       showIcon: true
     })
-  }).catch(err => {
-    console.error('复制失败:', err)
-  })
+  } finally {
+    document.body.removeChild(textArea)
+  }
+}
+
+// 渲染Markdown内容
+const renderMarkdown = (content) => {
+  if (!content) return ''
+  return marked(content)
 }
 </script>
 
@@ -581,6 +641,161 @@ const copyMessage = (content) => {
   margin-bottom: 12px;
 }
 
+/* Markdown样式 */
+.ai-message-content h1,
+.ai-message-content h2,
+.ai-message-content h3,
+.ai-message-content h4,
+.ai-message-content h5,
+.ai-message-content h6 {
+  margin-top: 24px;
+  margin-bottom: 16px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.ai-message-content h1 {
+  font-size: 2em;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 0.3em;
+}
+
+.ai-message-content h2 {
+  font-size: 1.5em;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 0.3em;
+}
+
+.ai-message-content h3 {
+  font-size: 1.25em;
+}
+
+.ai-message-content h4 {
+  font-size: 1em;
+}
+
+.ai-message-content h5 {
+  font-size: 0.875em;
+}
+
+.ai-message-content h6 {
+  font-size: 0.85em;
+  color: #6b7280;
+}
+
+.ai-message-content p {
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
+.ai-message-content ul,
+.ai-message-content ol {
+  margin-top: 0;
+  margin-bottom: 16px;
+  padding-left: 2em;
+}
+
+.ai-message-content ul li,
+.ai-message-content ol li {
+  margin-bottom: 8px;
+}
+
+.ai-message-content ul ul,
+.ai-message-content ul ol,
+.ai-message-content ol ul,
+.ai-message-content ol ol {
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+.ai-message-content strong {
+  font-weight: 600;
+}
+
+.ai-message-content em {
+  font-style: italic;
+}
+
+.ai-message-content code {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.875em;
+  padding: 0.2em 0.4em;
+  margin: 0;
+  background-color: rgba(175, 184, 193, 0.2);
+  border-radius: 3px;
+}
+
+.ai-message-content pre {
+  margin-top: 0;
+  margin-bottom: 16px;
+  padding: 16px;
+  overflow: auto;
+  font-size: 0.875em;
+  line-height: 1.45;
+  background-color: #f3f4f6;
+  border-radius: 6px;
+}
+
+.ai-message-content pre code {
+  padding: 0;
+  margin: 0;
+  font-size: 100%;
+  word-break: normal;
+  white-space: pre;
+  background: transparent;
+  border: 0;
+}
+
+.ai-message-content a {
+  color: #409EFF;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.ai-message-content a:hover {
+  color: #66b1ff;
+  text-decoration: underline;
+}
+
+.ai-message-content blockquote {
+  margin-top: 0;
+  margin-bottom: 16px;
+  padding: 16px;
+  background-color: #f8f9fa;
+  border-left: 4px solid #409EFF;
+  border-radius: 0 6px 6px 0;
+}
+
+.ai-message-content blockquote p {
+  margin-bottom: 0;
+}
+
+.ai-message-content table {
+  margin-top: 0;
+  margin-bottom: 16px;
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.ai-message-content table th,
+.ai-message-content table td {
+  padding: 8px 12px;
+  border: 1px solid #e5e7eb;
+}
+
+.ai-message-content table th {
+  font-weight: 600;
+  background-color: #f3f4f6;
+  text-align: left;
+}
+
+.ai-message-content hr {
+  margin-top: 24px;
+  margin-bottom: 24px;
+  border: 0;
+  border-top: 1px solid #e5e7eb;
+}
+
 .ai-footer {
   display: flex;
   gap: 16px;
@@ -588,14 +803,20 @@ const copyMessage = (content) => {
 }
 
 .ai-footer-button {
-  font-size: 12px;
+  font-size: 14px;
   color: #409EFF !important;
-  padding: 0 !important;
+  padding: 8px !important;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.ai-footer-button:hover {
+  background-color: rgba(64, 158, 255, 0.1);
 }
 
 .ai-footer-button .el-icon {
-  font-size: 12px;
-  margin-right: 4px;
+  font-size: 16px;
+  margin-right: 0;
 }
 
 /* 消息输入容器 */
@@ -872,6 +1093,63 @@ const copyMessage = (content) => {
   margin-bottom: 12px;
 }
 
+/* 深色主题下的Markdown样式 */
+:deep(.dark .main-content .ai-message-content h1),
+:deep(.dark .main-content .ai-message-content h2),
+:deep(.dark .main-content .ai-message-content h3),
+:deep(.dark .main-content .ai-message-content h4),
+:deep(.dark .main-content .ai-message-content h5),
+:deep(.dark .main-content .ai-message-content h6) {
+  color: #f1f5f9;
+}
+
+:deep(.dark .main-content .ai-message-content h1),
+:deep(.dark .main-content .ai-message-content h2) {
+  border-bottom-color: #374151;
+}
+
+:deep(.dark .main-content .ai-message-content h6) {
+  color: #9ca3af;
+}
+
+:deep(.dark .main-content .ai-message-content code) {
+  background-color: rgba(175, 184, 193, 0.1);
+  color: #f1f5f9;
+}
+
+:deep(.dark .main-content .ai-message-content pre) {
+  background-color: #1e293b;
+  color: #f1f5f9;
+}
+
+:deep(.dark .main-content .ai-message-content blockquote) {
+  background-color: #1e293b;
+  border-left-color: #409EFF;
+}
+
+:deep(.dark .main-content .ai-message-content table th) {
+  background-color: #333a47;
+  border-color: #475569;
+  color: #f1f5f9;
+}
+
+:deep(.dark .main-content .ai-message-content table td) {
+  border-color: #475569;
+  color: #f1f5f9;
+}
+
+:deep(.dark .main-content .ai-message-content hr) {
+  border-top-color: #374151;
+}
+
+:deep(.dark .main-content .ai-message-content a) {
+  color: #66b1ff;
+}
+
+:deep(.dark .main-content .ai-message-content a:hover) {
+  color: #93c5fd;
+}
+
 :deep(.dark .main-content .ai-footer) {
   background-color: #333a47;
   padding: 8px 12px;
@@ -883,12 +1161,15 @@ const copyMessage = (content) => {
 
 :deep(.dark .main-content .ai-footer-button) {
   color: #409EFF !important;
-  font-size: 12px;
-  padding: 0 !important;
+  font-size: 14px;
+  padding: 8px !important;
+  border-radius: 4px;
+  transition: all 0.2s ease;
 }
 
 :deep(.dark .main-content .ai-footer-button:hover) {
   color: #66b1ff !important;
+  background-color: rgba(64, 158, 255, 0.2);
 }
 
 :deep(.dark .main-content .message-input-container) {
