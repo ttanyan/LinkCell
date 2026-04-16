@@ -11,3 +11,4 @@ redis>=5.0
 celery>=5.3
 tiktoken>=0.5
 numpy<2
+pageindex>=0.1.0

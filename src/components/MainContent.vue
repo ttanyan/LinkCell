@@ -34,6 +34,24 @@
           </el-tooltip>
         </div>
       </div>
+      
+      <!-- 已选文档显示 -->
+      <div v-if="selectedDocuments.length > 0" class="selected-documents">
+        <div class="selected-documents-header">
+          <span>已选择的文档:</span>
+        </div>
+        <div class="selected-documents-list">
+          <el-tag
+            v-for="doc in selectedDocuments"
+            :key="doc"
+            closable
+            @close="removeDocument(doc)"
+          >
+            {{ getDocumentName(doc) }}
+          </el-tag>
+        </div>
+      </div>
+      
       <div class="conversation-body">
         <div
           v-for="(message, index) in messages"
@@ -112,6 +130,8 @@ const models = ref([])
 const selectedModel = ref('')
 const isLoading = ref(false)
 const chatId = ref('00000000-0000-0000-0000-000000000000')
+const selectedDocuments = ref([])
+const documents = ref([])
 
 const isSendButtonDisabled = computed(() => {
   const result = !messageInput.value || !messageInput.value.trim() || !selectedModel.value || isLoading.value
@@ -125,6 +145,7 @@ const currentModelName = computed(() => {
 
 onMounted(() => {
   loadModels()
+  loadDocuments()
 })
 
 const loadModels = async () => {
@@ -141,6 +162,28 @@ const loadModels = async () => {
     }
   } catch (error) {
     console.error('加载模型失败:', error)
+  }
+}
+
+const loadDocuments = async () => {
+  try {
+    const response = await fetch('/api/documents')
+    const data = await response.json()
+    documents.value = data
+  } catch (error) {
+    console.error('加载文档失败:', error)
+  }
+}
+
+const getDocumentName = (docId) => {
+  const doc = documents.value.find(d => d.id === docId)
+  return doc ? doc.name : docId
+}
+
+const removeDocument = (docId) => {
+  const index = selectedDocuments.value.indexOf(docId)
+  if (index > -1) {
+    selectedDocuments.value.splice(index, 1)
   }
 }
 
@@ -171,7 +214,8 @@ const sendMessage = async () => {
     console.log('请求参数:', {
       message: userMessage,
       model_id: selectedModel.value,
-      workspace_id: '00000000-0000-0000-0000-000000000000'
+      workspace_id: '00000000-0000-0000-0000-000000000000',
+      selected_documents: selectedDocuments.value
     })
     const response = await fetch(`/api/chat/${chatId.value}/chat`, {
       method: 'POST',
@@ -181,7 +225,8 @@ const sendMessage = async () => {
       body: JSON.stringify({
         message: userMessage,
         model_id: selectedModel.value,
-        workspace_id: '00000000-0000-0000-0000-000000000000'
+        workspace_id: '00000000-0000-0000-0000-000000000000',
+        selected_documents: selectedDocuments.value
       })
     })
     console.log('响应状态:', response.status)
@@ -404,6 +449,31 @@ const copyMessage = (content) => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.selected-documents {
+  margin-bottom: 20px;
+  padding: 12px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.selected-documents-header {
+  font-size: 14px;
+  font-weight: 500;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.selected-documents-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.selected-documents-list .el-tag {
+  margin-bottom: 4px;
 }
 
 .icon-button {
@@ -737,6 +807,29 @@ const copyMessage = (content) => {
 :deep(.dark .main-content .model-select-dropdown .el-option.is-selected) {
   background-color: #1e40af !important;
   color: #f1f5f9 !important;
+}
+
+:deep(.dark .main-content .selected-documents) {
+  background-color: #1e293b;
+  border: 1px solid #333a47;
+}
+
+:deep(.dark .main-content .selected-documents-header) {
+  color: #9ca3af;
+}
+
+:deep(.dark .main-content .selected-documents-list .el-tag) {
+  background-color: #333a47;
+  border-color: #475569;
+  color: #f1f5f9;
+}
+
+:deep(.dark .main-content .selected-documents-list .el-tag .el-tag__close) {
+  color: #9ca3af;
+}
+
+:deep(.dark .main-content .selected-documents-list .el-tag .el-tag__close:hover) {
+  color: #f1f5f9;
 }
 
 :deep(.dark .main-content .icon-button) {

@@ -1,10 +1,14 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.parsers import MultiPartParser, FormParser
 from application.chat_pipeline.pipeline_manage import PipelineManage
 from application.chat_pipeline.step.generate_human_message_step.impl.base_generate_human_message_step import BaseGenerateHumanMessageStep
 from application.chat_pipeline.step.chat_step.impl.base_chat_step import BaseChatStep
+from application.models.document import Document
 import uuid
+import os
+from pageindex import PageIndexClient
 
 class ChatView(APIView):
     def post(self, request, chat_id):
@@ -67,3 +71,111 @@ class OpenAIChatView(APIView):
         
         result = pipeline.build().run(context)
         return result
+
+class DocumentUploadView(APIView):
+    parser_classes = [MultiPartParser, FormParser]
+    
+    def post(self, request):
+        try:
+            file = request.FILES.get('file')
+            if not file:
+                return Response({'error': 'File is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # 确保上传目录存在
+            upload_dir = 'uploads'
+            if not os.path.exists(upload_dir):
+                os.makedirs(upload_dir)
+            
+            # 保存文件
+            file_path = os.path.join(upload_dir, file.name)
+            with open(file_path, 'wb+') as destination:
+                for chunk in file.chunks():
+                    destination.write(chunk)
+            
+            # 创建文档记录
+            document = Document.objects.create(
+                name=file.name,
+                file_path=file_path,
+                status='INDEXING'
+            )
+            
+            # 调用PageIndex创建索引
+            try:
+                # 注意：PageIndexClient需要API密钥，这里使用模拟实现
+                # pi = PageIndexClient(api_key="your_api_key_here")
+                # 暂时使用模拟索引ID
+                index_id = f"index_{uuid.uuid4()}"
+                document.pageindex_id = index_id
+                document.status = 'COMPLETED'
+            except Exception as e:
+                document.status = 'FAILED'
+                print(f"PageIndex indexing failed: {e}")
+            
+            document.save()
+            
+            return Response({'id': str(document.id), 'name': document.name, 'status': document.status}, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class DocumentListView(APIView):
+    def get(self, request):
+        documents = Document.objects.all()
+        data = [{
+            'id': str(doc.id),
+            'name': doc.name,
+            'status': doc.status,
+            'upload_time': doc.upload_time,
+            'pageindex_id': doc.pageindex_id
+        } for doc in documents]
+        return Response(data)
+
+class DocumentDetailView(APIView):
+    def get(self, request, document_id):
+        try:
+            document = Document.objects.get(id=document_id)
+            data = {
+                'id': str(document.id),
+                'name': document.name,
+                'status': document.status,
+                'upload_time': document.upload_time,
+                'pageindex_id': document.pageindex_id
+            }
+            return Response(data)
+        except Document.DoesNotExist:
+            return Response({'error': 'Document not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    def delete(self, request, document_id):
+        try:
+            document = Document.objects.get(id=document_id)
+            # 删除文件
+            if os.path.exists(document.file_path):
+                os.remove(document.file_path)
+            # 删除文档记录
+            document.delete()
+            return Response({'message': 'Document deleted successfully'}, status=status.HTTP_200_OK)
+        except Document.DoesNotExist:
+            return Response({'error': 'Document not found'}, status=status.HTTP_404_NOT_FOUND)
+
+class DocumentReindexView(APIView):
+    def post(self, request, document_id):
+        try:
+            document = Document.objects.get(id=document_id)
+            document.status = 'INDEXING'
+            document.save()
+            
+            # 重新索引
+            try:
+                # 注意：PageIndexClient需要API密钥，这里使用模拟实现
+                # pi = PageIndexClient(api_key="your_api_key_here")
+                # 暂时使用模拟索引ID
+                index_id = f"index_{uuid.uuid4()}"
+                document.pageindex_id = index_id
+                document.status = 'COMPLETED'
+            except Exception as e:
+                document.status = 'FAILED'
+                print(f"PageIndex reindexing failed: {e}")
+            
+            document.save()
+            return Response({'id': str(document.id), 'status': document.status}, status=status.HTTP_200_OK)
+        except Document.DoesNotExist:
+            return Response({'error': 'Document not found'}, status=status.HTTP_404_NOT_FOUND)
