@@ -2,8 +2,8 @@
   <div class="app-container">
     <AppHeader @open-settings="showSettings = true" />
     <div class="main-container" v-if="!showSettings">
-      <LeftSidebar />
-      <MainContent />
+      <LeftSidebar :selectedDocuments="selectedDocuments" @update:selectedDocuments="selectedDocuments = $event" />
+      <MainContent :selectedDocuments="selectedDocuments" @update:selectedDocuments="selectedDocuments = $event" />
       <RightSidebar />
     </div>
     <Settings v-else @close-settings="showSettings = false" />
@@ -11,7 +11,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, provide } from 'vue'
 import AppHeader from './components/AppHeader.vue'
 import LeftSidebar from './components/LeftSidebar.vue'
 import MainContent from './components/MainContent.vue'
@@ -19,6 +19,10 @@ import RightSidebar from './components/RightSidebar.vue'
 import Settings from './components/Settings.vue'
 
 const showSettings = ref(false)
+const selectedDocuments = ref([])
+
+// 提供共享状态
+provide('selectedDocuments', selectedDocuments)
 </script>
 
 <style scoped>
@@ -34,6 +38,8 @@ const showSettings = ref(false)
   display: flex;
   height: calc(100vh - 56px);
   margin-top: 56px;
+  width: 100%;
+  overflow: hidden;
 }
 </style>
 

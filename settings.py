@@ -31,6 +31,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'middleware.APILoggingMiddleware',
 ]
 
 ROOT_URLCONF = 'urls'
@@ -86,3 +87,6 @@ USE_TZ = True
 STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# PageIndex API Configuration
+PAGEINDEX_API_KEY = os.environ.get('PAGEINDEX_API_KEY', '973d769fa9ef41bfb0d01bcc1fae7556')

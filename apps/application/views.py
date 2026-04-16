@@ -6,15 +6,17 @@ from application.chat_pipeline.pipeline_manage import PipelineManage
 from application.chat_pipeline.step.generate_human_message_step.impl.base_generate_human_message_step import BaseGenerateHumanMessageStep
 from application.chat_pipeline.step.chat_step.impl.base_chat_step import BaseChatStep
 from application.models.document import Document
+from application.utils.pageindex_client import PageIndexClientManager
 import uuid
 import os
-from pageindex import PageIndexClient
+from django.conf import settings
 
 class ChatView(APIView):
     def post(self, request, chat_id):
         data = request.data
         message = data.get('message')
         stream = data.get('stream', True)
+        selected_documents = data.get('selected_documents', [])
         
         if not message:
             return Response({'error': 'Message is required'}, status=status.HTTP_400_BAD_REQUEST)
@@ -24,6 +26,36 @@ class ChatView(APIView):
         except ValueError:
             return Response({'error': 'Invalid chat_id'}, status=status.HTTP_400_BAD_REQUEST)
         
+        # 如果选择了文档，使用PageIndex进行对话
+        if selected_documents:
+            try:
+                # 获取PageIndex客户端实例
+                pi = PageIndexClientManager.get_client()
+                
+                # 获取文档的pageindex_id
+                pageindex_ids = []
+                for doc_id in selected_documents:
+                    try:
+                        doc = Document.objects.get(id=doc_id)
+                        if doc.pageindex_id:
+                            pageindex_ids.append(doc.pageindex_id)
+                    except Document.DoesNotExist:
+                        pass
+                
+                if pageindex_ids:
+                    # 使用PageIndex的Chat API
+                    response = pi.chat_completions(
+                        messages=[{"role": "user", "content": message}],
+                        doc_id=pageindex_ids
+                    )
+                    
+                    # 构建响应
+                    content = response["choices"][0]["message"]["content"]
+                    return Response({'content': content}, status=status.HTTP_200_OK)
+            except Exception as e:
+                print(f"PageIndex chat failed: {e}")
+        
+        # 否则使用原有的对话流程
         pipeline = PipelineManage.Builder()
         pipeline.append_step(BaseGenerateHumanMessageStep)
         pipeline.append_step(BaseChatStep)
@@ -101,12 +133,17 @@ class DocumentUploadView(APIView):
             
             # 调用PageIndex创建索引
             try:
-                # 注意：PageIndexClient需要API密钥，这里使用模拟实现
-                # pi = PageIndexClient(api_key="your_api_key_here")
-                # 暂时使用模拟索引ID
-                index_id = f"index_{uuid.uuid4()}"
-                document.pageindex_id = index_id
-                document.status = 'COMPLETED'
+                # 获取PageIndex客户端实例
+                pi = PageIndexClientManager.get_client()
+                # 上传文档
+                result = pi.submit_document(file_path)
+                document.pageindex_id = result["doc_id"]
+                # 检查处理状态
+                status_check = pi.get_document(document.pageindex_id)["status"]
+                if status_check == "completed":
+                    document.status = 'COMPLETED'
+                else:
+                    document.status = 'INDEXING'  # 保持索引中状态，后续可通过定时任务检查
             except Exception as e:
                 document.status = 'FAILED'
                 print(f"PageIndex indexing failed: {e}")
@@ -165,12 +202,17 @@ class DocumentReindexView(APIView):
             
             # 重新索引
             try:
-                # 注意：PageIndexClient需要API密钥，这里使用模拟实现
-                # pi = PageIndexClient(api_key="your_api_key_here")
-                # 暂时使用模拟索引ID
-                index_id = f"index_{uuid.uuid4()}"
-                document.pageindex_id = index_id
-                document.status = 'COMPLETED'
+                # 获取PageIndex客户端实例
+                pi = PageIndexClientManager.get_client()
+                # 上传文档
+                result = pi.submit_document(document.file_path)
+                document.pageindex_id = result["doc_id"]
+                # 检查处理状态
+                status_check = pi.get_document(document.pageindex_id)["status"]
+                if status_check == "completed":
+                    document.status = 'COMPLETED'
+                else:
+                    document.status = 'INDEXING'  # 保持索引中状态，后续可通过定时任务检查
             except Exception as e:
                 document.status = 'FAILED'
                 print(f"PageIndex reindexing failed: {e}")
@@ -179,3 +221,28 @@ class DocumentReindexView(APIView):
             return Response({'id': str(document.id), 'status': document.status}, status=status.HTTP_200_OK)
         except Document.DoesNotExist:
             return Response({'error': 'Document not found'}, status=status.HTTP_404_NOT_FOUND)
+
+class DocumentStatusUpdateView(APIView):
+    def post(self, request, document_id):
+        try:
+            document = Document.objects.get(id=document_id)
+            
+            if document.pageindex_id:
+                # 获取PageIndex客户端实例
+                pi = PageIndexClientManager.get_client()
+                # 检查处理状态
+                status_check = pi.get_document(document.pageindex_id)["status"]
+                if status_check == "completed":
+                    document.status = 'COMPLETED'
+                elif status_check == "processing":
+                    document.status = 'INDEXING'
+                else:
+                    document.status = 'FAILED'
+                document.save()
+                return Response({'id': str(document.id), 'status': document.status}, status=status.HTTP_200_OK)
+            else:
+                return Response({'error': 'Document has no pageindex_id'}, status=status.HTTP_400_BAD_REQUEST)
+        except Document.DoesNotExist:
+            return Response({'error': 'Document not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -128,13 +128,21 @@ import { Message, ArrowRight, Edit, More, Paperclip, Star, Refresh, ArrowUp, Plu
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { marked } from 'marked'
 
+const props = defineProps({
+  selectedDocuments: {
+    type: Array,
+    default: () => []
+  }
+})
+
+const emit = defineEmits(['update:selectedDocuments'])
+
 const messageInput = ref('')
 const messages = ref([])
 const models = ref([])
 const selectedModel = ref('')
 const isLoading = ref(false)
 const chatId = ref('00000000-0000-0000-0000-000000000000')
-const selectedDocuments = ref([])
 const documents = ref([])
 
 const isSendButtonDisabled = computed(() => {
@@ -185,10 +193,8 @@ const getDocumentName = (docId) => {
 }
 
 const removeDocument = (docId) => {
-  const index = selectedDocuments.value.indexOf(docId)
-  if (index > -1) {
-    selectedDocuments.value.splice(index, 1)
-  }
+  const newSelection = props.selectedDocuments.filter(id => id !== docId)
+  emit('update:selectedDocuments', newSelection)
 }
 
 const sendMessage = async () => {
@@ -219,7 +225,7 @@ const sendMessage = async () => {
       message: userMessage,
       model_id: selectedModel.value,
       workspace_id: '00000000-0000-0000-0000-000000000000',
-      selected_documents: selectedDocuments.value
+      selected_documents: props.selectedDocuments
     })
     const response = await fetch(`/api/chat/${chatId.value}/chat`, {
       method: 'POST',
@@ -230,57 +236,91 @@ const sendMessage = async () => {
         message: userMessage,
         model_id: selectedModel.value,
         workspace_id: '00000000-0000-0000-0000-000000000000',
-        selected_documents: selectedDocuments.value
+        selected_documents: props.selectedDocuments
       })
     })
     console.log('响应状态:', response.status)
     
     if (response.ok) {
-      console.log('响应类型:', response.headers.get('Content-Type'))
-      console.log('响应体:', response.body)
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let fullContent = ''
+      const contentType = response.headers.get('Content-Type')
+      console.log('响应类型:', contentType)
       
-      while (true) {
-        const { done, value } = await reader.read()
-        console.log('读取数据块:', { done, value: value ? value.length : 0 })
-        if (done) break
+      // 检查是否为流式响应 (SSE)
+      if (contentType && contentType.includes('text/event-stream')) {
+        // 流式响应处理
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder()
+        let fullContent = ''
         
-        const chunk = decoder.decode(value)
-        console.log('解码后的数据:', chunk)
-        const lines = chunk.split('\n')
-        console.log('分割后的行:', lines)
-        
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.substring(6)
-            console.log('提取的数据:', data)
-            if (data) {
-              try {
-                const json = JSON.parse(data)
-                console.log('解析后的JSON:', json)
-                if (json.content && json.content.trim()) {
-                  fullContent += json.content
-                  console.log('当前完整内容:', fullContent)
-                  // 实时更新消息内容
-                  messages.value[aiMessageIndex] = {
-                    ...messages.value[aiMessageIndex],
-                    content: fullContent,
-                    status: 'loading'
+        while (true) {
+          const { done, value } = await reader.read()
+          console.log('读取数据块:', { done, value: value ? value.length : 0 })
+          if (done) break
+          
+          const chunk = decoder.decode(value)
+          console.log('解码后的数据:', chunk)
+          const lines = chunk.split('\n')
+          console.log('分割后的行:', lines)
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.substring(6)
+              console.log('提取的数据:', data)
+              if (data) {
+                try {
+                  const json = JSON.parse(data)
+                  console.log('解析后的JSON:', json)
+                  if (json.content && json.content.trim()) {
+                    fullContent += json.content
+                    console.log('当前完整内容:', fullContent)
+                    // 实时更新消息内容
+                    messages.value[aiMessageIndex] = {
+                      ...messages.value[aiMessageIndex],
+                      content: fullContent,
+                      status: 'loading'
+                    }
+                    // 滚动到底部
+                    scrollToBottom()
                   }
-                }
-                if (json.is_end) {
-                  messages.value[aiMessageIndex] = {
-                    ...messages.value[aiMessageIndex],
-                    content: fullContent,
-                    status: 'completed'
+                  if (json.is_end) {
+                    messages.value[aiMessageIndex] = {
+                      ...messages.value[aiMessageIndex],
+                      content: fullContent,
+                      status: 'completed'
+                    }
+                    // 滚动到底部
+                    scrollToBottom()
                   }
+                } catch (e) {
+                  console.error('解析SSE数据失败:', e)
                 }
-              } catch (e) {
-                console.error('解析SSE数据失败:', e)
               }
             }
+          }
+        }
+      } else {
+        // 非流式响应处理
+        try {
+          const data = await response.json()
+          console.log('非流式响应数据:', data)
+          if (data.content) {
+            // 直接渲染完整回答
+            messages.value[aiMessageIndex] = {
+              ...messages.value[aiMessageIndex],
+              content: data.content,
+              status: 'completed'
+            }
+            // 滚动到底部
+            scrollToBottom()
+          } else {
+            throw new Error('响应数据格式错误')
+          }
+        } catch (e) {
+          console.error('解析非流式响应失败:', e)
+          messages.value[aiMessageIndex] = {
+            ...messages.value[aiMessageIndex],
+            content: `错误: ${e.message || '解析响应失败'}`,
+            status: 'error'
           }
         }
       }
@@ -408,6 +448,16 @@ const renderMarkdown = (content) => {
   if (!content) return ''
   return marked(content)
 }
+
+// 滚动到底部
+const scrollToBottom = () => {
+  setTimeout(() => {
+    const conversationBody = document.querySelector('.conversation-body')
+    if (conversationBody) {
+      conversationBody.scrollTop = conversationBody.scrollHeight
+    }
+  }, 100)
+}
 </script>
 
 <style scoped>
@@ -423,8 +473,48 @@ const renderMarkdown = (content) => {
 
 .conversation-container {
   flex: 1;
-  overflow-y: auto;
+  overflow: hidden;
   padding: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.conversation-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 8px;
+}
+
+.conversation-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.conversation-body::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.conversation-body::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.conversation-body::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* 深色主题滚动条 */
+:deep(.dark .main-content .conversation-body::-webkit-scrollbar-track) {
+  background: #1f2937;
+}
+
+:deep(.dark .main-content .conversation-body::-webkit-scrollbar-thumb) {
+  background: #4b5563;
+}
+
+:deep(.dark .main-content .conversation-body::-webkit-scrollbar-thumb:hover) {
+  background: #6b7280;
 }
 
 .conversation-header {

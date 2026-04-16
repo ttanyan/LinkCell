@@ -59,6 +59,9 @@
           </div>
         </div>
         <div class="cell-actions">
+          <el-button type="text" size="small" @click.stop="updateDocumentStatus(doc.id)">
+            <el-icon><View /></el-icon>
+          </el-button>
           <el-button type="text" size="small" @click.stop="reindexDocument(doc.id)">
             <el-icon><Refresh /></el-icon>
           </el-button>
@@ -67,117 +70,29 @@
           </el-button>
         </div>
       </div>
-      
-      <!-- 静态文件列表 -->
-      <div
-        v-for="(item, index) in cellItems"
-        :key="index"
-        class="cell-item"
-        :class="{ active: activeIndex === index }"
-        @click="activeIndex = index"
-      >
-        <div class="cell-icon">
-          <el-icon v-if="item.type === 'folder'"><Folder /></el-icon>
-          <el-icon v-else><Document /></el-icon>
-        </div>
-        <div class="cell-info">
-          <div class="cell-title">{{ item.title }}</div>
-          <div class="cell-meta">
-            <span class="cell-date">{{ item.date }}</span>
-            <span class="cell-count">{{ item.cells }} cells</span>
-          </div>
-        </div>
-      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { Folder, Document, Upload, Refresh, Delete } from '@element-plus/icons-vue'
+import { ref, onMounted, watch } from 'vue'
+import { Folder, Document, Upload, Refresh, Delete, View } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+
+const props = defineProps({
+  selectedDocuments: {
+    type: Array,
+    default: () => []
+  }
+})
+
+const emit = defineEmits(['update:selectedDocuments'])
 
 const searchQuery = ref('')
 const activeIndex = ref(1)
 const fileInput = ref(null)
 const documents = ref([])
-const selectedDocuments = ref([])
 const uploadProgress = ref(0)
-
-const cellItems = [
-  {
-    title: 'Project Alpha Docs.pdf',
-    date: 'May 30, 2023',
-    cells: 12,
-    type: 'folder'
-  },
-  {
-    title: 'Tech Stack Notes.pdf',
-    date: 'May 30, 2023',
-    cells: 12,
-    type: 'document'
-  },
-  {
-    title: 'Project Alpha Docs.pdf',
-    date: 'May 30, 2023',
-    cells: 12,
-    type: 'folder'
-  },
-  {
-    title: 'Worstants.pdf',
-    date: 'May 11, 2023',
-    cells: 12,
-    type: 'document'
-  },
-  {
-    title: 'Tech Stack Notes.pdf',
-    date: '2023-03-23',
-    cells: 12,
-    type: 'document'
-  },
-  {
-    title: 'Vimroservices.pdf',
-    date: '2022-05-23',
-    cells: 12,
-    type: 'folder'
-  },
-  {
-    title: 'Asianh Notes.pdf',
-    date: '2022-03-25',
-    cells: 12,
-    type: 'document'
-  },
-  {
-    title: 'Project Beta Docs.pdf',
-    date: '2023-06-15',
-    cells: 8,
-    type: 'folder'
-  },
-  {
-    title: 'Design System.pdf',
-    date: '2023-07-20',
-    cells: 15,
-    type: 'document'
-  },
-  {
-    title: 'API Documentation.pdf',
-    date: '2023-08-10',
-    cells: 20,
-    type: 'document'
-  },
-  {
-    title: 'User Stories.pdf',
-    date: '2023-09-05',
-    cells: 12,
-    type: 'folder'
-  },
-  {
-    title: 'Test Cases.pdf',
-    date: '2023-10-12',
-    cells: 18,
-    type: 'document'
-  }
-]
 
 onMounted(() => {
   loadDocuments()
@@ -244,16 +159,18 @@ const uploadFiles = async (files) => {
 }
 
 const toggleDocumentSelection = (docId) => {
-  const index = selectedDocuments.value.indexOf(docId)
+  const newSelection = [...props.selectedDocuments]
+  const index = newSelection.indexOf(docId)
   if (index > -1) {
-    selectedDocuments.value.splice(index, 1)
+    newSelection.splice(index, 1)
   } else {
-    selectedDocuments.value.push(docId)
+    newSelection.push(docId)
   }
+  emit('update:selectedDocuments', newSelection)
 }
 
 const clearSelection = () => {
-  selectedDocuments.value = []
+  emit('update:selectedDocuments', [])
 }
 
 const deleteDocument = async (docId) => {
@@ -266,10 +183,8 @@ const deleteDocument = async (docId) => {
       ElMessage.success('文档删除成功')
       loadDocuments()
       // 从选择中移除
-      const index = selectedDocuments.value.indexOf(docId)
-      if (index > -1) {
-        selectedDocuments.value.splice(index, 1)
-      }
+      const newSelection = props.selectedDocuments.filter(id => id !== docId)
+      emit('update:selectedDocuments', newSelection)
     } else {
       ElMessage.error('删除失败')
     }
@@ -294,6 +209,25 @@ const reindexDocument = async (docId) => {
   } catch (error) {
     console.error('重新索引失败:', error)
     ElMessage.error('重新索引失败')
+  }
+}
+
+const updateDocumentStatus = async (docId) => {
+  try {
+    const response = await fetch(`/api/documents/${docId}/update-status`, {
+      method: 'POST'
+    })
+    
+    if (response.ok) {
+      const data = await response.json()
+      ElMessage.success(`文档状态已更新为: ${data.status}`)
+      loadDocuments()
+    } else {
+      ElMessage.error('更新状态失败')
+    }
+  } catch (error) {
+    console.error('更新状态失败:', error)
+    ElMessage.error('更新状态失败')
   }
 }
 

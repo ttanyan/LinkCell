@@ -1,6 +1,6 @@
 from django.urls import path
 from models_provider.views import ModelProviderList, ModelList, ModelCredentialValid, ModelCreate, ModelListAll, ModelDelete
-from application.views import ChatView, OpenAIChatView, DocumentUploadView, DocumentListView, DocumentDetailView, DocumentReindexView
+from application.views import ChatView, OpenAIChatView, DocumentUploadView, DocumentListView, DocumentDetailView, DocumentReindexView, DocumentStatusUpdateView
 
 urlpatterns = [
     # 模型管理API
@@ -20,4 +20,5 @@ urlpatterns = [
     path('api/documents/upload', DocumentUploadView.as_view(), name='document_upload'),
     path('api/documents/<str:document_id>', DocumentDetailView.as_view(), name='document_detail'),
     path('api/documents/<str:document_id>/reindex', DocumentReindexView.as_view(), name='document_reindex'),
+    path('api/documents/<str:document_id>/update-status', DocumentStatusUpdateView.as_view(), name='document_status_update'),
 ]
