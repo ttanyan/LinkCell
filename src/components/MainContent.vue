@@ -337,31 +337,9 @@ const clearConversation = () => {
 
 // 复制消息功能
 const copyMessage = (content) => {
-  // 优先使用现代的Clipboard API（即使在非HTTPS环境下也尝试使用）
-  if (navigator.clipboard) {
-    navigator.clipboard.writeText(content).then(() => {
-      ElMessage({
-        message: '复制成功',
-        type: 'success',
-        position: 'top-right',
-        duration: 2500,
-        showIcon: true
-      })
-    }).catch(err => {
-      console.error('复制失败:', err)
-      // 降级到传统方法
-      fallbackCopyTextToClipboard(content)
-    })
-  } else {
-    // 降级到传统方法
-    fallbackCopyTextToClipboard(content)
-  }
-}
-
-// 传统的复制方法，作为备用
-const fallbackCopyTextToClipboard = (text) => {
+  // 直接使用传统方法，确保在用户点击事件的直接回调中执行
   const textArea = document.createElement('textarea')
-  textArea.value = text
+  textArea.value = content
   
   // 确保textarea不在可视区域
   textArea.style.position = 'fixed'
@@ -384,7 +362,29 @@ const fallbackCopyTextToClipboard = (text) => {
         showIcon: true
       })
     } else {
-      throw new Error('复制命令执行失败')
+      // 如果传统方法失败，尝试使用Clipboard API
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(content).then(() => {
+          ElMessage({
+            message: '复制成功',
+            type: 'success',
+            position: 'top-right',
+            duration: 2500,
+            showIcon: true
+          })
+        }).catch(err => {
+          console.error('复制失败:', err)
+          ElMessage({
+            message: '复制失败，请手动复制',
+            type: 'error',
+            position: 'top-right',
+            duration: 2500,
+            showIcon: true
+          })
+        })
+      } else {
+        throw new Error('复制命令执行失败')
+      }
     }
   } catch (err) {
     console.error('复制失败:', err)
@@ -396,7 +396,10 @@ const fallbackCopyTextToClipboard = (text) => {
       showIcon: true
     })
   } finally {
-    document.body.removeChild(textArea)
+    // 延迟移除textarea，确保复制操作完成
+    setTimeout(() => {
+      document.body.removeChild(textArea)
+    }, 100)
   }
 }
 
