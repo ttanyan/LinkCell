@@ -2,11 +2,10 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser
-from application.chat_pipeline.pipeline_manage import PipelineManage
-from application.chat_pipeline.step.generate_human_message_step.impl.base_generate_human_message_step import BaseGenerateHumanMessageStep
-from application.chat_pipeline.step.chat_step.impl.base_chat_step import BaseChatStep
-from application.models.document import Document
-from application.utils.pageindex_client import PageIndexClientManager
+from apps.application.chat_pipeline.pipeline_manage import PipelineManage
+from apps.application.chat_pipeline.step.generate_human_message_step.impl.base_generate_human_message_step import BaseGenerateHumanMessageStep
+from apps.application.chat_pipeline.step.chat_step.impl.base_chat_step import BaseChatStep
+from apps.application.utils.pageindex_client import PageIndexClientManager
 import uuid
 import os
 from django.conf import settings

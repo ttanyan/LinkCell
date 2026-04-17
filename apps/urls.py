@@ -1,6 +1,6 @@
 from django.urls import path, include
-from models_provider.views import ModelProviderList, ModelList, ModelCredentialValid, ModelCreate, ModelListAll, ModelDelete
-from application.views import ChatView, OpenAIChatView, DocumentUploadView, DocumentListView, DocumentDetailView, DocumentReindexView, DocumentStatusUpdateView
+from apps.models_provider.views import ModelProviderList, ModelList, ModelCredentialValid, ModelCreate, ModelListAll, ModelDelete
+from apps.application.views import ChatView, OpenAIChatView, DocumentUploadView, DocumentListView, DocumentDetailView, DocumentReindexView, DocumentStatusUpdateView
 
 urlpatterns = [
     # 模型管理API
@@ -22,6 +22,6 @@ urlpatterns = [
     path('api/documents/<str:document_id>/reindex', DocumentReindexView.as_view(), name='document_reindex'),
     path('api/documents/<str:document_id>/update-status', DocumentStatusUpdateView.as_view(), name='document_status_update'),
     
-    # MemOS API
-    path('api/', include('memos.urls')),
+    # 记忆管理API
+    path('api/', include('apps.memos_integration.urls')),
 ]

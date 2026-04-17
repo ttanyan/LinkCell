@@ -18,10 +18,9 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'rest_framework',
-    'models_provider',
-    'application',
-    'memos',
+    'apps.models_provider',
+    'apps.application',
+    'apps.memos_integration',
 ]
 
 MIDDLEWARE = [
@@ -91,7 +90,3 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # PageIndex API Configuration
 PAGEINDEX_API_KEY = os.environ.get('PAGEINDEX_API_KEY', '973d769fa9ef41bfb0d01bcc1fae7556')
-
-# MemOS API Configuration
-MEMOS_API_KEY = os.environ.get('MEMOS_API_KEY', 'mpg-t1HLqL8Jev+CeaeWC5vc97AHeaTsn/dNo5rwgCkk')
-MEMOS_API_URL = os.environ.get('MEMOS_API_URL', 'https://api.memos-dashboard.openmem.net')

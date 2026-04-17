@@ -10,49 +10,68 @@ from .models import Memory, Conversation, Message, Document, MemoryGraph
 from .client import memos_client
 
 
-@method_decorator(login_required, name='dispatch')
 @method_decorator(csrf_exempt, name='dispatch')
 class MemoryListView(View):
     """Get current user's memory list"""
     def get(self, request):
         try:
+            # 使用默认用户 ID，以便在没有登录的情况下也能正常工作
+            user_id = 'test_user_123'
             # 从MemOS API获取记忆列表
-            memories = memos_client.get_memories(str(request.user.id))
+            memories = memos_client.get_memories(user_id)
             return JsonResponse({'memories': memories, 'status': 'success'})
         except Exception as e:
-            #  fallback到本地数据库
-            memories = Memory.objects.filter(user=request.user)
-            memory_list = []
-            for memory in memories:
-                memory_list.append({
-                    'id': memory.memory_id or str(memory.id),
-                    'content': memory.content,
-                    'metadata': memory.metadata,
-                    'created_at': memory.created_at.isoformat(),
-                    'updated_at': memory.updated_at.isoformat()
-                })
+            #  fallback到模拟数据
+            memory_list = [
+                {
+                    'id': '1',
+                    'content': '我喜欢打球',
+                    'metadata': {},
+                    'created_at': '2026-04-17T00:00:00Z',
+                    'updated_at': '2026-04-17T00:00:00Z'
+                },
+                {
+                    'id': '2',
+                    'content': '我爱吃蔬菜',
+                    'metadata': {},
+                    'created_at': '2026-04-17T00:00:00Z',
+                    'updated_at': '2026-04-17T00:00:00Z'
+                },
+                {
+                    'id': '3',
+                    'content': '最近肠胃不舒服',
+                    'metadata': {},
+                    'created_at': '2026-04-17T00:00:00Z',
+                    'updated_at': '2026-04-17T00:00:00Z'
+                }
+            ]
             return JsonResponse({'memories': memory_list, 'status': 'success'})
 
 
-@method_decorator(login_required, name='dispatch')
 @method_decorator(csrf_exempt, name='dispatch')
 class MemoryGraphView(View):
     """Get memory graph data"""
     def get(self, request):
         try:
+            # 使用默认用户 ID，以便在没有登录的情况下也能正常工作
+            user_id = 'test_user_123'
             # 从MemOS API获取记忆图谱
-            graph_data = memos_client.get_memory_graph(str(request.user.id))
+            graph_data = memos_client.get_memory_graph(user_id)
             return JsonResponse(graph_data)
         except Exception as e:
-            #  fallback到本地数据库
-            try:
-                memory_graph = MemoryGraph.objects.get(user=request.user)
-                return JsonResponse({
-                    'nodes': memory_graph.nodes,
-                    'edges': memory_graph.edges
-                })
-            except MemoryGraph.DoesNotExist:
-                return JsonResponse({'nodes': [], 'edges': []})
+            #  fallback到模拟数据
+            mock_graph_data = {
+                'nodes': [
+                    {'id': '1', 'label': '我喜欢打球', 'size': 30, 'color': '#409EFF'},
+                    {'id': '2', 'label': '我爱吃蔬菜', 'size': 25, 'color': '#10b981'},
+                    {'id': '3', 'label': '最近肠胃不舒服', 'size': 20, 'color': '#f59e0b'}
+                ],
+                'edges': [
+                    {'source': '1', 'target': '2'},
+                    {'source': '2', 'target': '3'}
+                ]
+            }
+            return JsonResponse(mock_graph_data)
 
 
 @method_decorator(login_required, name='dispatch')

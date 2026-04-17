@@ -15,7 +15,7 @@ def get_model_instance_by_model_workspace_id(model_id, workspace_id, **kwargs):
     )
 
 def get_model_by_id(model_id, workspace_id):
-    from models_provider.models import Model
+    from apps.models_provider.models import Model
     return Model.objects.get(id=model_id, workspace_id=workspace_id)
 
 def decrypt(credential):

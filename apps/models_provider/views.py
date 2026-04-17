@@ -2,7 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from models_provider.constants.model_provider_constants import ModelProvideConstants
-from models_provider.models import Model
+from apps.models_provider.models import Model
 from models_provider.tools import encrypt
 import json
 

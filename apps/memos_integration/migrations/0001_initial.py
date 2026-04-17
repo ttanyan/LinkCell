@@ -180,7 +180,7 @@ class Migration(migrations.Migration):
                     models.ForeignKey(
                         on_delete=django.db.models.deletion.CASCADE,
                         related_name="messages",
-                        to="memos.conversation",
+                        to="memos_integration.conversation",
                     ),
                 ),
             ],

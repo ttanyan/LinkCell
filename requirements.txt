@@ -12,3 +12,4 @@ celery>=5.3
 tiktoken>=0.5
 numpy<2
 pageindex>=0.1.0
+MemoryOS>=1.0.0
