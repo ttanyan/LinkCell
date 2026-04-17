@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import path, include
 from models_provider.views import ModelProviderList, ModelList, ModelCredentialValid, ModelCreate, ModelListAll, ModelDelete
 from application.views import ChatView, OpenAIChatView, DocumentUploadView, DocumentListView, DocumentDetailView, DocumentReindexView, DocumentStatusUpdateView
 
@@ -21,4 +21,7 @@ urlpatterns = [
     path('api/documents/<str:document_id>', DocumentDetailView.as_view(), name='document_detail'),
     path('api/documents/<str:document_id>/reindex', DocumentReindexView.as_view(), name='document_reindex'),
     path('api/documents/<str:document_id>/update-status', DocumentStatusUpdateView.as_view(), name='document_status_update'),
+    
+    # MemOS API
+    path('api/', include('memos.urls')),
 ]

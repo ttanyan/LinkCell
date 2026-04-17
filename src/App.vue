@@ -17,6 +17,8 @@ import LeftSidebar from './components/LeftSidebar.vue'
 import MainContent from './components/MainContent.vue'
 import RightSidebar from './components/RightSidebar.vue'
 import Settings from './components/Settings.vue'
+import MemosPanel from './components/MemosPanel.vue'
+import MemoryGraphPanel from './components/MemoryGraphPanel.vue'
 
 const showSettings = ref(false)
 const selectedDocuments = ref([])

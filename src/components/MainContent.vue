@@ -197,6 +197,33 @@ const removeDocument = (docId) => {
   emit('update:selectedDocuments', newSelection)
 }
 
+// 自动提取记忆功能
+const extractAndSaveMemory = async (userMessage) => {
+  try {
+    // 分析用户消息，提取可能的记忆内容
+    // 这里可以根据实际需求实现更复杂的分析逻辑
+    const memoryContent = userMessage
+    
+    // 调用MemOS API保存记忆
+    const response = await fetch('/api/memos/create', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        content: memoryContent
+      })
+    })
+    
+    const data = await response.json()
+    if (data.status === 'success') {
+      console.log('记忆保存成功:', data.memory)
+    }
+  } catch (error) {
+    console.error('提取记忆失败:', error)
+  }
+}
+
 const sendMessage = async () => {
   console.log('sendMessage 函数被调用')
   console.log('messageInput.value:', messageInput.value)
@@ -218,6 +245,9 @@ const sendMessage = async () => {
   
   messageInput.value = ''
   isLoading.value = true
+  
+  // 后台静默提取记忆
+  extractAndSaveMemory(userMessage)
   
   try {
     console.log('发送消息请求到:', `/api/chat/${chatId.value}/chat`)
