@@ -39,20 +39,7 @@
         <!-- 空状态 -->
         <div class="empty-state" v-if="filteredMemories.length === 0">
           <p>暂无记忆</p>
-          <p class="empty-hint">开始添加您的记忆吧</p>
         </div>
-      </div>
-      
-      <!-- 添加记忆输入框 -->
-      <div class="add-memory">
-        <input 
-          type="text" 
-          v-model="newMemoryContent" 
-          placeholder="添加新记忆..." 
-          class="add-input"
-          @keyup.enter="addMemory"
-        />
-        <button class="add-button" @click="addMemory">+</button>
       </div>
     </div>
     
@@ -94,7 +81,6 @@ import * as echarts from 'echarts'
 // 记忆管理状态
 const memories = ref([])
 const searchQuery = ref('')
-const newMemoryContent = ref('')
 const expandedMemoryId = ref(null)
 const showEditModal = ref(false)
 const editingMemory = ref({ id: '', content: '' })
@@ -148,30 +134,7 @@ const toggleMemoryExpand = (memoryId) => {
   expandedMemoryId.value = expandedMemoryId.value === memoryId ? null : memoryId
 }
 
-// 添加记忆
-const addMemory = async () => {
-  if (!newMemoryContent.value.trim()) return
-  
-  try {
-    const response = await fetch('/api/memos/create', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        content: newMemoryContent.value.trim(),
-        metadata: {}
-      })
-    })
-    
-    if (response.ok) {
-      newMemoryContent.value = ''
-      await loadMemories()
-    }
-  } catch (error) {
-    console.error('Failed to add memory:', error)
-  }
-}
+
 
 // 编辑记忆
 const editMemory = (memory) => {
