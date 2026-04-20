@@ -6,6 +6,7 @@ from apps.application.chat_pipeline.pipeline_manage import PipelineManage
 from apps.application.chat_pipeline.step.generate_human_message_step.impl.base_generate_human_message_step import BaseGenerateHumanMessageStep
 from apps.application.chat_pipeline.step.chat_step.impl.base_chat_step import BaseChatStep
 from apps.application.utils.pageindex_client import PageIndexClientManager
+from apps.application.models.document import Document
 import uuid
 import os
 from django.conf import settings

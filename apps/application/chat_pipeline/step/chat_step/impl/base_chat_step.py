@@ -4,6 +4,7 @@ from django.http import StreamingHttpResponse
 from langchain_core.messages import AIMessageChunk
 import uuid
 from models_provider.tools import get_model_instance_by_model_workspace_id
+from apps.memos_integration.client import memos_client
 
 class ChatStepSerializer(Serializer):
     message_list = ListField(required=True)
@@ -54,8 +55,10 @@ class BaseChatStep(IBaseChatPipelineStep):
     
     def execute_stream(self, message_list, chat_id, problem_text, chat_model, 
                       paragraph_list, manage, **kwargs):
+        # 传递 problem_text 和 chat_id 给 get_stream_result
         chat_result, is_ai_chat = self.get_stream_result(
-            message_list, chat_model, paragraph_list, **kwargs
+            message_list, chat_model, paragraph_list, 
+            problem_text=problem_text, chat_id=chat_id, **kwargs
         )
         
         chat_record_id = uuid.uuid4()
@@ -72,10 +75,47 @@ class BaseChatStep(IBaseChatPipelineStep):
     
     def execute_block(self, message_list, chat_id, problem_text, chat_model, 
                      paragraph_list, manage, **kwargs):
-        result = chat_model.invoke(message_list)
+        # 对话前：获取真实记忆作为上下文
+        enhanced_message_list = message_list.copy()
+        try:
+            # 使用默认用户 ID
+            user_id = 'test_user_123'
+            # 提取用户的问题
+            user_query = problem_text
+            # 搜索相关记忆
+            relevant_memories = memos_client.search_memory(
+                query=user_query,
+                user_id=user_id,
+                conversation_id=str(chat_id)
+            )
+            # 将记忆作为上下文添加到消息列表前面
+            if relevant_memories:
+                # 构造记忆上下文消息
+                memory_context = "用户记忆：\n"
+                # 处理 memory_detail_list
+                if hasattr(relevant_memories, 'memory_detail_list') and relevant_memories.memory_detail_list:
+                    for memory in relevant_memories.memory_detail_list:
+                        if hasattr(memory, 'memory_key'):
+                            memory_context += f"- {memory.memory_key}\n"
+                # 处理 preference_detail_list
+                if hasattr(relevant_memories, 'preference_detail_list') and relevant_memories.preference_detail_list:
+                    for preference in relevant_memories.preference_detail_list:
+                        if hasattr(preference, 'preference'):
+                            memory_context += f"- {preference.preference}\n"
+                # 添加到消息列表前面
+                enhanced_message_list.insert(0, {
+                    'role': 'system',
+                    'content': memory_context
+                })
+        except Exception as e:
+            # 捕获异常，不影响正常聊天
+            pass
+        
+        # 调用模型
+        result = chat_model.invoke(enhanced_message_list)
         
         try:
-            request_token = chat_model.get_num_tokens_from_messages(message_list)
+            request_token = chat_model.get_num_tokens_from_messages(enhanced_message_list)
         except Exception as e:
             request_token = 0
         
@@ -88,6 +128,34 @@ class BaseChatStep(IBaseChatPipelineStep):
         self.context['answer_tokens'] = response_token
         self.context['answer_text'] = result.content
         
+        # 对话后：保存真实对话到 MemOS
+        try:
+            # 使用默认用户 ID
+            user_id = 'test_user_123'
+            # 构造官方要求的 messages 格式
+            user_message = None
+            for msg in message_list:
+                if hasattr(msg, 'role') and msg.role == 'user' and hasattr(msg, 'content'):
+                    user_message = msg.content
+                elif isinstance(msg, dict) and msg.get('role') == 'user' and 'content' in msg:
+                    user_message = msg['content']
+            
+            if user_message:
+                # 构造 messages 数组
+                save_messages = [
+                    {"role": "user", "content": user_message},
+                    {"role": "assistant", "content": result.content}
+                ]
+                # 保存对话到 MemOS
+                memos_client.add_message(
+                    messages=save_messages,
+                    user_id=user_id,
+                    conversation_id=str(chat_id)
+                )
+        except Exception as e:
+            # 捕获异常，不影响正常聊天
+            pass
+        
         return {
             'content': result.content,
             'request_token': request_token,
@@ -98,12 +166,84 @@ class BaseChatStep(IBaseChatPipelineStep):
         if chat_model is None:
             return iter([AIMessageChunk(content="模型未配置")]), False
         
-        return chat_model.stream(message_list), True
+        # 对话前：获取真实记忆作为上下文
+        enhanced_message_list = message_list.copy()
+        try:
+            # 使用默认用户 ID
+            user_id = 'test_user_123'
+            # 提取用户的问题
+            user_query = kwargs.get('problem_text', '')
+            # 搜索相关记忆
+            relevant_memories = memos_client.search_memory(
+                query=user_query,
+                user_id=user_id,
+                conversation_id=str(kwargs.get('chat_id', ''))
+            )
+            # 将记忆作为上下文添加到消息列表前面
+            if relevant_memories:
+                # 构造记忆上下文消息
+                memory_context = "用户记忆：\n"
+                # 处理 memory_detail_list
+                if hasattr(relevant_memories, 'memory_detail_list') and relevant_memories.memory_detail_list:
+                    for memory in relevant_memories.memory_detail_list:
+                        if hasattr(memory, 'memory_key'):
+                            memory_context += f"- {memory.memory_key}\n"
+                # 处理 preference_detail_list
+                if hasattr(relevant_memories, 'preference_detail_list') and relevant_memories.preference_detail_list:
+                    for preference in relevant_memories.preference_detail_list:
+                        if hasattr(preference, 'preference'):
+                            memory_context += f"- {preference.preference}\n"
+                # 添加到消息列表前面
+                enhanced_message_list.insert(0, {
+                    'role': 'system',
+                    'content': memory_context
+                })
+        except Exception as e:
+            # 捕获异常，不影响正常聊天
+            pass
+        
+        return chat_model.stream(enhanced_message_list), True
 
 def event_content(response, chat_id, chat_record_id, paragraph_list, 
                  manage, step, problem_text, chat_model, message_list):
     all_text = ''
     reasoning_content = ''
+    
+    # 对话前：获取真实记忆作为上下文
+    enhanced_message_list = message_list.copy()
+    try:
+        # 使用默认用户 ID
+        user_id = 'test_user_123'
+        # 提取用户的问题
+        user_query = problem_text
+        # 搜索相关记忆
+        relevant_memories = memos_client.search_memory(
+            query=user_query,
+            user_id=user_id,
+            conversation_id=str(chat_id)
+        )
+        # 将记忆作为上下文添加到消息列表前面
+        if relevant_memories:
+            # 构造记忆上下文消息
+            memory_context = "用户记忆：\n"
+            # 处理 memory_detail_list
+            if hasattr(relevant_memories, 'memory_detail_list') and relevant_memories.memory_detail_list:
+                for memory in relevant_memories.memory_detail_list:
+                    if hasattr(memory, 'memory_key'):
+                        memory_context += f"- {memory.memory_key}\n"
+            # 处理 preference_detail_list
+            if hasattr(relevant_memories, 'preference_detail_list') and relevant_memories.preference_detail_list:
+                for preference in relevant_memories.preference_detail_list:
+                    if hasattr(preference, 'preference'):
+                        memory_context += f"- {preference.preference}\n"
+            # 添加到消息列表前面
+            enhanced_message_list.insert(0, {
+                'role': 'system',
+                'content': memory_context
+            })
+    except Exception as e:
+        # 捕获异常，不影响正常聊天
+        pass
     
     try:
         for chunk in response:
@@ -120,7 +260,7 @@ def event_content(response, chat_id, chat_record_id, paragraph_list,
             )
         
         try:
-            request_token = chat_model.get_num_tokens_from_messages(message_list)
+            request_token = chat_model.get_num_tokens_from_messages(enhanced_message_list)
         except Exception as e:
             request_token = 0
         
@@ -132,6 +272,34 @@ def event_content(response, chat_id, chat_record_id, paragraph_list,
         step.context['message_tokens'] = request_token
         step.context['answer_tokens'] = response_token
         step.context['answer_text'] = all_text
+        
+        # 对话后：保存真实对话到 MemOS
+        try:
+            # 使用默认用户 ID
+            user_id = 'test_user_123'
+            # 构造官方要求的 messages 格式
+            user_message = None
+            for msg in message_list:
+                if hasattr(msg, 'role') and msg.role == 'user' and hasattr(msg, 'content'):
+                    user_message = msg.content
+                elif isinstance(msg, dict) and msg.get('role') == 'user' and 'content' in msg:
+                    user_message = msg['content']
+            
+            if user_message:
+                # 构造 messages 数组
+                save_messages = [
+                    {"role": "user", "content": user_message},
+                    {"role": "assistant", "content": all_text}
+                ]
+                # 保存对话到 MemOS
+                memos_client.add_message(
+                    messages=save_messages,
+                    user_id=user_id,
+                    conversation_id=str(chat_id)
+                )
+        except Exception as e:
+            # 捕获异常，不影响正常聊天
+            pass
         
         yield manage.base_to_response.to_stream_chunk_response(
             chat_id, chat_record_id, 'ai-chat-node',
@@ -149,6 +317,28 @@ def extract_content(chunk):
 
 def extract_reasoning_content(chunk):
     return ''
+
+def process_messages(messages):
+    """处理消息列表，确保所有消息都是纯字符串格式"""
+    processed_messages = []
+    for message in messages:
+        # 检查是否是 LangChain 消息对象
+        if hasattr(message, 'role') and hasattr(message, 'content'):
+            processed_messages.append({
+                'role': message.role,
+                'content': message.content
+            })
+        # 检查是否是字典
+        elif isinstance(message, dict) and 'role' in message and 'content' in message:
+            # 确保 content 是字符串
+            content = message['content']
+            if hasattr(content, 'content'):
+                content = content.content
+            processed_messages.append({
+                'role': message['role'],
+                'content': str(content)
+            })
+    return processed_messages
 
 def error_response(chat_id, chat_record_id, error_message):
     import json

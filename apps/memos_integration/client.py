@@ -1,11 +1,12 @@
 """MemOS Client Implementation"""
 
 import os
-import sys
 from typing import List, Dict, Optional, Any
 
 # 添加系统路径，确保能正确导入MemoryOS SDK
+import sys
 sys.path.insert(0, '/home/tlw/miniconda3/lib/python3.13/site-packages')
+
 from memos.api.client import MemOSClient as SDKMemOSClient
 
 
@@ -22,165 +23,100 @@ class MemOSClient:
     def __init__(self):
         """Initialize MemOS Client"""
         if not hasattr(self, '_initialized'):
-            self.api_key = os.environ.get('MEMOS_API_KEY', '')
+            from django.conf import settings
+            self.api_key = getattr(settings, 'MEMOS_API_KEY', 'mpg-t1HLqL8Jev+CeaeWC5vc97AHeaTsn/dNo5rwgCkk')
+            # 初始化 SDK 客户端
             self.client = SDKMemOSClient(api_key=self.api_key)
             self._initialized = True
 
-    # 记忆管理
-    def create_memory(self, user_id: str, content: str, metadata: Optional[Dict] = None) -> Dict:
-        """Create memory"""
+    # 存储对话
+    def add_message(self, messages: List[Dict], user_id: str, conversation_id: str) -> Dict:
+        """Add messages to conversation"""
         try:
-            # 使用SDK创建记忆
-            result = self.client.memories.create(
+            # 使用SDK添加消息
+            result = self.client.add_message(
+                messages=messages,
                 user_id=user_id,
-                content=content,
-                metadata=metadata or {}
+                conversation_id=conversation_id
             )
             return result
         except Exception as e:
-            raise Exception(f"Create memory failed: {str(e)}")
+            print(f"Add message failed: {str(e)}")
+            return {"status": "error", "message": str(e)}
 
-    def search_memory(self, user_id: str, query: str) -> List[Dict]:
+    # 检索记忆
+    def search_memory(self, query: str, user_id: str, conversation_id: str):
         """Search memory semantically"""
         try:
             # 使用SDK搜索记忆
-            result = self.client.memories.search(
+            result = self.client.search_memory(
+                query=query,
                 user_id=user_id,
-                query=query
-            )
-            return result.get('memories', [])
-        except Exception as e:
-            raise Exception(f"Search memory failed: {str(e)}")
-
-    def update_memory(self, memory_id: str, content: str, metadata: Optional[Dict] = None) -> Dict:
-        """Update memory"""
-        try:
-            # 使用SDK更新记忆
-            result = self.client.memories.update(
-                memory_id=memory_id,
-                content=content,
-                metadata=metadata or {}
+                conversation_id=conversation_id
             )
             return result
         except Exception as e:
-            raise Exception(f"Update memory failed: {str(e)}")
+            print(f"Search memory failed: {str(e)}")
+            return None
 
-    def delete_memory(self, memory_id: str) -> Dict:
-        """Delete memory"""
-        try:
-            # 使用SDK删除记忆
-            result = self.client.memories.delete(memory_id=memory_id)
-            return result
-        except Exception as e:
-            raise Exception(f"Delete memory failed: {str(e)}")
-
-    def get_memories(self, user_id: str, limit: int = 100, offset: int = 0) -> List[Dict]:
+    # 获取记忆列表
+    def get_memories(self, user_id: str, limit: int = 100, offset: int = 0, query: str = ""):
         """Get memory list"""
         try:
-            # 使用SDK获取记忆列表
-            result = self.client.memories.list(
+            # 使用搜索方法获取记忆，传递查询参数
+            result = self.client.search_memory(
+                query=query or "all",  # 如果没有查询参数，使用 "all"
                 user_id=user_id,
-                limit=limit,
-                offset=offset
-            )
-            return result.get('memories', [])
-        except Exception as e:
-            raise Exception(f"Get memories failed: {str(e)}")
-
-    # 智能语义检索 (RAG)
-    def rag_retrieve(self, user_id: str, query: str, top_k: int = 5) -> List[Dict]:
-        """Retrieve relevant memories for RAG"""
-        try:
-            # 使用SDK进行RAG检索
-            result = self.client.rag.retrieve(
-                user_id=user_id,
-                query=query,
-                top_k=top_k
-            )
-            return result.get('memories', [])
-        except Exception as e:
-            raise Exception(f"RAG retrieve failed: {str(e)}")
-
-    # 会话/对话管理
-    def create_conversation(self, user_id: str, title: str) -> Dict:
-        """Create conversation"""
-        try:
-            # 使用SDK创建对话
-            result = self.client.conversations.create(
-                user_id=user_id,
-                title=title
+                conversation_id=""
             )
             return result
         except Exception as e:
-            raise Exception(f"Create conversation failed: {str(e)}")
-
-    def save_message(self, conversation_id: str, role: str, content: str) -> Dict:
-        """Save message to conversation"""
-        try:
-            # 使用SDK保存消息
-            result = self.client.conversations.messages.create(
-                conversation_id=conversation_id,
-                role=role,
-                content=content
-            )
-            return result
-        except Exception as e:
-            raise Exception(f"Save message failed: {str(e)}")
-
-    def get_conversation(self, conversation_id: str) -> Dict:
-        """Get conversation details"""
-        try:
-            # 使用SDK获取对话详情
-            result = self.client.conversations.get(conversation_id=conversation_id)
-            return result
-        except Exception as e:
-            raise Exception(f"Get conversation failed: {str(e)}")
-
-    # 文档/知识管理
-    def upload_document(self, user_id: str, file_path: str, document_type: str) -> Dict:
-        """Upload document"""
-        try:
-            # 使用SDK上传文档
-            result = self.client.documents.upload(
-                user_id=user_id,
-                file_path=file_path,
-                document_type=document_type
-            )
-            return result
-        except Exception as e:
-            raise Exception(f"Upload document failed: {str(e)}")
-
-    def get_documents(self, user_id: str) -> List[Dict]:
-        """Get user documents"""
-        try:
-            # 使用SDK获取文档列表
-            result = self.client.documents.list(user_id=user_id)
-            return result.get('documents', [])
-        except Exception as e:
-            raise Exception(f"Get documents failed: {str(e)}")
-
-    # 大模型增强
-    def get_enhanced_context(self, user_id: str, query: str) -> Dict:
-        """Get enhanced context for LLM"""
-        try:
-            # 使用SDK获取增强上下文
-            result = self.client.llm.context(
-                user_id=user_id,
-                query=query
-            )
-            return result
-        except Exception as e:
-            raise Exception(f"Get enhanced context failed: {str(e)}")
+            print(f"Get memories failed: {str(e)}")
+            return None
 
     # 记忆图谱
-    def get_memory_graph(self, user_id: str) -> Dict:
+    def get_memory_graph(self, user_id: str, query: str = "") -> Dict:
         """Get memory graph data"""
         try:
-            # 使用SDK获取记忆图谱
-            result = self.client.memories.graph(user_id=user_id)
-            return result
+            # 获取记忆列表
+            memory_data = self.get_memories(user_id, query=query)
+            # 构建简单的图谱数据
+            nodes = []
+            edges = []
+            node_id = 1
+            
+            # 处理 memory_detail_list
+            if memory_data and hasattr(memory_data, 'memory_detail_list') and memory_data.memory_detail_list:
+                for memory in memory_data.memory_detail_list:
+                    if hasattr(memory, 'memory_key'):
+                        nodes.append({
+                            "id": str(node_id),
+                            "label": memory.memory_key[:20] + '...',
+                            "size": 20 + node_id * 5,
+                            "color": f"#{node_id * 50 % 255:02x}{node_id * 100 % 255:02x}{node_id * 150 % 255:02x}"
+                        })
+                        if node_id > 1:
+                            edges.append({"source": str(node_id - 1), "target": str(node_id)})
+                        node_id += 1
+            
+            # 处理 preference_detail_list
+            if memory_data and hasattr(memory_data, 'preference_detail_list') and memory_data.preference_detail_list:
+                for preference in memory_data.preference_detail_list:
+                    if hasattr(preference, 'preference'):
+                        nodes.append({
+                            "id": str(node_id),
+                            "label": preference.preference[:20] + '...',
+                            "size": 20 + node_id * 5,
+                            "color": f"#{node_id * 50 % 255:02x}{node_id * 100 % 255:02x}{node_id * 150 % 255:02x}"
+                        })
+                        if node_id > 1:
+                            edges.append({"source": str(node_id - 1), "target": str(node_id)})
+                        node_id += 1
+            
+            return {"nodes": nodes, "edges": edges}
         except Exception as e:
-            raise Exception(f"Get memory graph failed: {str(e)}")
+            print(f"Get memory graph failed: {str(e)}")
+            return {"nodes": [], "edges": []}
 
 
 # 全局客户端实例

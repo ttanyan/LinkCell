@@ -26,13 +26,19 @@
         >
           <div class="memory-content" @click="toggleMemoryExpand(memory.id)">
             <p>{{ memory.content }}</p>
+            <!-- 显示 tags 标签 -->
+            <div class="memory-tags" v-if="memory.tags && memory.tags.length > 0">
+              <span v-for="(tag, index) in memory.tags" :key="index" class="tag">
+                {{ tag }}{{ index < memory.tags.length - 1 ? ', ' : '' }}
+              </span>
+            </div>
             <span class="memory-date">{{ formatDate(memory.created_at) }}</span>
           </div>
           
           <!-- 展开的详情和操作按钮 -->
           <div class="memory-actions" v-if="expandedMemoryId === memory.id">
             <button class="action-button edit-button" @click.stop="editMemory(memory)">编辑</button>
-            <button class="action-button delete-button" @click.stop="deleteMemory(memory.id)">删除</button>
+            <button class="action-button delete-button" @click.stop="confirmDelete(memory.id)">删除</button>
           </div>
         </div>
         
@@ -70,6 +76,21 @@
         </div>
       </div>
     </div>
+    
+    <!-- 删除确认对话框 -->
+    <el-dialog
+      v-model="showDeleteDialog"
+      title="删除记忆"
+      width="30%"
+    >
+      <span>确定要删除这条记忆吗？</span>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="showDeleteDialog = false">取消</el-button>
+          <el-button type="danger" @click="confirmDeleteMemory">确定</el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -84,6 +105,8 @@ const searchQuery = ref('')
 const expandedMemoryId = ref(null)
 const showEditModal = ref(false)
 const editingMemory = ref({ id: '', content: '' })
+const showDeleteDialog = ref(false)
+const memoryIdToDelete = ref(null)
 
 // 图谱状态
 const graphContainer = ref(null)
@@ -98,29 +121,50 @@ const filteredMemories = computed(() => {
 })
 
 // 加载记忆
-const loadMemories = async () => {
+const loadMemories = async (query = "") => {
   try {
-    const response = await fetch('/api/memos/list')
+    const response = await fetch(`/api/memos/list?query=${encodeURIComponent(query)}`)
     if (response.ok) {
       const data = await response.json()
-      memories.value = data.memories || []
+      // 处理 search_memory 返回的结果结构
+      const memoryData = data.memories || data
+      const newMemories = []
+      
+      // 处理 memory_detail_list
+      if (memoryData.memory_detail_list && Array.isArray(memoryData.memory_detail_list)) {
+        memoryData.memory_detail_list.forEach((item, index) => {
+          if (item.memory_key) {
+            newMemories.push({
+              id: `memory_${index}`,
+              content: item.memory_key, // 只显示 memory_key，不显示 memory_value
+              tags: item.tags || [], // 包含 tags 数组
+              created_at: new Date().toISOString()
+            })
+          }
+        })
+      }
+      
+      // 处理 preference_detail_list
+      if (memoryData.preference_detail_list && Array.isArray(memoryData.preference_detail_list)) {
+        memoryData.preference_detail_list.forEach((item, index) => {
+          if (item.preference) {
+            newMemories.push({
+              id: `preference_${index}`,
+              content: item.preference,
+              created_at: new Date().toISOString()
+            })
+          }
+        })
+      }
+      
+      memories.value = newMemories
     } else {
       console.error('Failed to load memories:', response.status)
-      // 模拟数据，用于测试
-      memories.value = [
-        { id: 1, content: '我喜欢打球', created_at: new Date().toISOString() },
-        { id: 2, content: '我爱吃蔬菜', created_at: new Date().toISOString() },
-        { id: 3, content: '最近肠胃不舒服', created_at: new Date().toISOString() }
-      ]
+      memories.value = []
     }
   } catch (error) {
     console.error('Failed to load memories:', error)
-    // 模拟数据，用于测试
-    memories.value = [
-      { id: 1, content: '我喜欢打球', created_at: new Date().toISOString() },
-      { id: 2, content: '我爱吃蔬菜', created_at: new Date().toISOString() },
-      { id: 3, content: '最近肠胃不舒服', created_at: new Date().toISOString() }
-    ]
+    memories.value = []
   }
 }
 
@@ -165,24 +209,46 @@ const saveEditMemory = async () => {
   }
 }
 
-// 删除记忆
-const deleteMemory = async (memoryId) => {
-  if (confirm('确定要删除这条记忆吗？')) {
+// 确认删除记忆
+const confirmDelete = (memoryId) => {
+  memoryIdToDelete.value = memoryId
+  showDeleteDialog.value = true
+}
+
+// 执行删除记忆
+const confirmDeleteMemory = async () => {
+  if (!memoryIdToDelete.value) return
+  
+  try {
+    // 直接从前端删除记忆
+    const index = memories.value.findIndex(memory => memory.id === memoryIdToDelete.value)
+    if (index !== -1) {
+      memories.value.splice(index, 1)
+      if (expandedMemoryId.value === memoryIdToDelete.value) {
+        expandedMemoryId.value = null
+      }
+    }
+    
+    // 同时调用后端 API
     try {
-      const response = await fetch(`/api/memos/delete/${memoryId}`, {
+      const response = await fetch(`/api/memos/delete/${memoryIdToDelete.value}`, {
         method: 'DELETE'
       })
-      
-      if (response.ok) {
-        await loadMemories()
-        if (expandedMemoryId.value === memoryId) {
-          expandedMemoryId.value = null
-        }
-      }
+      console.log('Delete memory response:', response.status)
     } catch (error) {
-      console.error('Failed to delete memory:', error)
+      console.error('Failed to delete memory from backend:', error)
     }
+  } catch (error) {
+    console.error('Failed to delete memory:', error)
+  } finally {
+    showDeleteDialog.value = false
+    memoryIdToDelete.value = null
   }
+}
+
+// 删除记忆（保留原方法名，确保兼容性）
+const deleteMemory = async (memoryId) => {
+  confirmDelete(memoryId)
 }
 
 // 格式化日期
@@ -200,31 +266,11 @@ const loadGraphData = async () => {
       updateChart(data.nodes || [], data.edges || [])
     } else {
       console.error('Failed to load graph data:', response.status)
-      // 模拟数据，用于测试
-      const mockNodes = [
-        { id: 1, label: '我喜欢打球', size: 30, color: '#409EFF' },
-        { id: 2, label: '我爱吃蔬菜', size: 25, color: '#10b981' },
-        { id: 3, label: '最近肠胃不舒服', size: 20, color: '#f59e0b' }
-      ]
-      const mockEdges = [
-        { source: 1, target: 2 },
-        { source: 2, target: 3 }
-      ]
-      updateChart(mockNodes, mockEdges)
+      updateChart([], [])
     }
   } catch (error) {
     console.error('Failed to load graph data:', error)
-    // 模拟数据，用于测试
-    const mockNodes = [
-      { id: 1, label: '我喜欢打球', size: 30, color: '#409EFF' },
-      { id: 2, label: '我爱吃蔬菜', size: 25, color: '#10b981' },
-      { id: 3, label: '最近肠胃不舒服', size: 20, color: '#f59e0b' }
-    ]
-    const mockEdges = [
-      { source: 1, target: 2 },
-      { source: 2, target: 3 }
-    ]
-    updateChart(mockNodes, mockEdges)
+    updateChart([], [])
   }
 }
 
@@ -378,6 +424,49 @@ onUnmounted(() => {
   observer.disconnect()
 })
 
+// 从对话数据中更新记忆
+defineExpose({
+  updateMemories: (memoryData) => {
+    try {
+      // 处理 search_memory 返回的结果
+      const newMemories = []
+      
+      // 处理 memory_detail_list
+      if (memoryData.memory_detail_list && Array.isArray(memoryData.memory_detail_list)) {
+        memoryData.memory_detail_list.forEach((item, index) => {
+          if (item.memory_key) {
+            newMemories.push({
+              id: `memory_${index}`,
+              content: item.memory_key, // 只显示 memory_key，不显示 memory_value
+              tags: item.tags || [], // 包含 tags 数组
+              created_at: new Date().toISOString()
+            })
+          }
+        })
+      }
+      
+      // 处理 preference_detail_list
+      if (memoryData.preference_detail_list && Array.isArray(memoryData.preference_detail_list)) {
+        memoryData.preference_detail_list.forEach((item, index) => {
+          if (item.preference) {
+            newMemories.push({
+              id: `preference_${index}`,
+              content: item.preference,
+              created_at: new Date().toISOString()
+            })
+          }
+        })
+      }
+      
+      if (newMemories.length > 0) {
+        memories.value = newMemories
+      }
+    } catch (error) {
+      console.error('Failed to update memories:', error)
+    }
+  }
+})
+
 // 定时刷新记忆列表
 setInterval(loadMemories, 30000) // 每30秒刷新一次
 </script>
@@ -514,6 +603,26 @@ setInterval(loadMemories, 30000) // 每30秒刷新一次
 .memory-date {
   font-size: 12px;
   color: #999;
+}
+
+/* 标签样式 */
+.memory-tags {
+  margin: 4px 0;
+  font-size: 12px;
+}
+
+.tag {
+  color: #64748b;
+  background-color: #f1f5f9;
+  padding: 2px 6px;
+  border-radius: 10px;
+  margin-right: 4px;
+  display: inline-block;
+}
+
+:deep(.dark .right-sidebar .tag) {
+  color: #94a3b8;
+  background-color: #333a47;
 }
 
 .memory-actions {
