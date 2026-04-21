@@ -13,6 +13,7 @@ class ChatStepSerializer(Serializer):
     problem_text = CharField(required=True)
     workspace_id = UUIDField(required=True)
     paragraph_list = ListField(required=False, default=list)
+    memory_prompt = CharField(required=False, default='')
 
 class BaseChatStep(IBaseChatPipelineStep):
     def get_step_serializer(self, manage):
@@ -26,14 +27,15 @@ class BaseChatStep(IBaseChatPipelineStep):
             problem_text=args['problem_text'],
             model_id=args['model_id'],
             workspace_id=args['workspace_id'],
-            paragraph_list=args['paragraph_list'],
-            stream=args['stream'],
+            paragraph_list=args.get('paragraph_list', []),
+            stream=args.get('stream', True),
+            memory_prompt=args.get('memory_prompt', ''),
             manage=manage
         )
         manage.context['chat_result'] = chat_result
     
     def execute(self, message_list, chat_id, problem_text, model_id, workspace_id, 
-                paragraph_list=None, stream=True, manage=None, **kwargs):
+                paragraph_list=None, stream=True, memory_prompt='', manage=None, **kwargs):
         if paragraph_list is None:
             paragraph_list = []
         
@@ -44,20 +46,20 @@ class BaseChatStep(IBaseChatPipelineStep):
         if stream:
             return self.execute_stream(
                 message_list, chat_id, problem_text, chat_model, 
-                paragraph_list, manage, **kwargs
+                paragraph_list, memory_prompt, manage, **kwargs
             )
         else:
             return self.execute_block(
                 message_list, chat_id, problem_text, chat_model, 
-                paragraph_list, manage, **kwargs
+                paragraph_list, memory_prompt, manage, **kwargs
             )
     
     def execute_stream(self, message_list, chat_id, problem_text, chat_model, 
-                      paragraph_list, manage, **kwargs):
+                      paragraph_list, memory_prompt='', manage=None, **kwargs):
         # 传递 problem_text 和 chat_id 给 get_stream_result
         chat_result, is_ai_chat, relevant_memories = self.get_stream_result(
             message_list, chat_model, paragraph_list, 
-            problem_text=problem_text, chat_id=chat_id, **kwargs
+            problem_text=problem_text, chat_id=chat_id, memory_prompt=memory_prompt, **kwargs
         )
         
         chat_record_id = uuid.uuid4()
@@ -73,9 +75,31 @@ class BaseChatStep(IBaseChatPipelineStep):
         return response
     
     def execute_block(self, message_list, chat_id, problem_text, chat_model, 
-                     paragraph_list, manage, **kwargs):
-        # 直接使用原始消息列表，不添加记忆上下文
+                     paragraph_list, memory_prompt='', manage=None, **kwargs):
+        # 直接使用原始消息列表，添加记忆上下文
         enhanced_message_list = message_list.copy()
+        
+        # 注入记忆Prompt到系统提示词的最顶部
+        if memory_prompt:
+            # 检查是否已有系统提示词
+            has_system_message = False
+            for i, message in enumerate(enhanced_message_list):
+                if (hasattr(message, 'role') and message.role == 'system') or \
+                   (isinstance(message, dict) and message.get('role') == 'system'):
+                    # 在现有系统提示词前添加记忆Prompt
+                    if hasattr(message, 'content'):
+                        message.content = memory_prompt + '\n\n' + message.content
+                    elif isinstance(message, dict) and 'content' in message:
+                        message['content'] = memory_prompt + '\n\n' + message['content']
+                    has_system_message = True
+                    break
+            
+            # 如果没有系统提示词，添加一个
+            if not has_system_message:
+                enhanced_message_list.insert(0, {
+                    'role': 'system',
+                    'content': memory_prompt
+                })
         
         # 调用模型
         result = chat_model.invoke(enhanced_message_list)
@@ -100,12 +124,34 @@ class BaseChatStep(IBaseChatPipelineStep):
             'answer_token': response_token
         }
     
-    def get_stream_result(self, message_list, chat_model, paragraph_list, **kwargs):
+    def get_stream_result(self, message_list, chat_model, paragraph_list, memory_prompt='', **kwargs):
         if chat_model is None:
             return iter([AIMessageChunk(content="模型未配置")]), False
         
-        # 直接使用原始消息列表，不添加记忆上下文
+        # 直接使用原始消息列表，添加记忆上下文
         enhanced_message_list = message_list.copy()
+        
+        # 注入记忆Prompt到系统提示词的最顶部
+        if memory_prompt:
+            # 检查是否已有系统提示词
+            has_system_message = False
+            for i, message in enumerate(enhanced_message_list):
+                if (hasattr(message, 'role') and message.role == 'system') or \
+                   (isinstance(message, dict) and message.get('role') == 'system'):
+                    # 在现有系统提示词前添加记忆Prompt
+                    if hasattr(message, 'content'):
+                        message.content = memory_prompt + '\n\n' + message.content
+                    elif isinstance(message, dict) and 'content' in message:
+                        message['content'] = memory_prompt + '\n\n' + message['content']
+                    has_system_message = True
+                    break
+            
+            # 如果没有系统提示词，添加一个
+            if not has_system_message:
+                enhanced_message_list.insert(0, {
+                    'role': 'system',
+                    'content': memory_prompt
+                })
         
         return chat_model.stream(enhanced_message_list), True, None
 
