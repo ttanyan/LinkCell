@@ -536,7 +536,9 @@ defineExpose({
 
 <style scoped>
 .main-content {
-  width: 50%;
+  width: 52%;
+  flex: 1;
+  min-width: 600px;
   height: 100%;
   background-color: #ffffff;
   display: flex;
@@ -548,7 +550,7 @@ defineExpose({
 .conversation-container {
   flex: 1;
   overflow: hidden;
-  padding: 20px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
 }
@@ -558,6 +560,7 @@ defineExpose({
   overflow-y: auto;
   overflow-x: hidden;
   padding-right: 8px;
+  margin-bottom: 16px;
 }
 
 .conversation-body::-webkit-scrollbar {

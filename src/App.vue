@@ -67,9 +67,23 @@ onMounted(() => {
 </style>
 
 <style>
-/* 确保所有元素都有平滑过渡 */
+/* 全局样式重置 */
 * {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
   transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, fill 0.3s ease, stroke 0.3s ease;
+}
+
+html, body {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* 确保页面最小宽度 */
+.app-container {
+  min-width: 1200px;
 }
 
 /* 全局深色主题样式 */

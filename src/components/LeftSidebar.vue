@@ -252,20 +252,23 @@ const getStatusType = (status) => {
 
 <style scoped>
 .left-sidebar {
-  width: 25%;
+  width: 18%;
+  min-width: 240px;
+  max-width: 320px;
   height: 100%;
   background-color: #f8f9fa;
   border-right: 1px solid #e5e7eb;
   display: flex;
   flex-direction: column;
-  padding: 20px;
+  padding: 16px;
   box-sizing: border-box;
   overflow: hidden;
+  flex-shrink: 0;
   transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .search-container {
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
 .search-input {
@@ -275,10 +278,10 @@ const getStatusType = (status) => {
 .upload-area {
   border: 2px dashed #d9d9d9;
   border-radius: 8px;
-  padding: 30px 20px;
+  padding: 20px 16px;
   text-align: center;
   cursor: pointer;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
   transition: all 0.3s ease;
 }
 
@@ -318,7 +321,6 @@ const getStatusType = (status) => {
 .cell-list {
   flex: 1;
   overflow-y: auto;
-  margin-bottom: 16px;
   padding-right: 8px;
 }
 

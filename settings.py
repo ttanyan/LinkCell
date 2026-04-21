@@ -89,7 +89,7 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # PageIndex API Configuration
-PAGEINDEX_API_KEY = os.environ.get('PAGEINDEX_API_KEY', '2ca1ff6a00e2472ebac06a7ef72207fc')
+PAGEINDEX_API_KEY = os.environ.get('PAGEINDEX_API_KEY', '*******')
 
 # MemOS API Configuration
-PAGEINDEX_API_KEY = os.environ.get('MEMOS_API_KEY', 'mpg-t1HLqL8Jev+CeaeWC5vc97AHeaTsn/dNo5rwgCkk')
+MEMOS_API_KEY = os.environ.get('MEMOS_API_KEY', '*******')

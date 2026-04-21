@@ -500,20 +500,23 @@ defineExpose({
 
 <style scoped>
 .right-sidebar {
-  width: 25%;
+  width: 30%;
+  min-width: 360px;
+  max-width: 480px;
   height: 100%;
   background-color: #f8f9fa;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
   overflow: hidden;
+  flex-shrink: 0;
   transition: background-color 0.3s ease;
 }
 
 .memory-logs {
-  height: 40%;
+  height: 55%;
   border-bottom: 1px solid #e5e7eb;
-  padding: 20px;
+  padding: 16px;
   overflow-y: auto;
   box-sizing: border-box;
   padding-right: 12px;
@@ -541,10 +544,11 @@ defineExpose({
 }
 
 .knowledge-graph {
-  height: 60%;
-  padding: 20px;
+  height: 45%;
+  padding: 16px;
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
 }
 
 .section-header {
