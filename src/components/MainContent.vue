@@ -128,6 +128,9 @@ import { Message, ArrowRight, Edit, More, Paperclip, Star, Refresh, ArrowUp, Plu
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { marked } from 'marked'
 
+// 右侧边栏引用
+const rightSidebarRef = ref(null)
+
 const props = defineProps({
   selectedDocuments: {
     type: Array,
@@ -219,15 +222,43 @@ const sendMessage = async () => {
   messageInput.value = ''
   isLoading.value = true
   
+  let aiFullContent = ''
+  
   try {
-    console.log('发送消息请求到:', `/api/chat/${chatId.value}/chat`)
-    console.log('请求参数:', {
-      message: userMessage,
-      model_id: selectedModel.value,
-      workspace_id: '00000000-0000-0000-0000-000000000000',
-      selected_documents: props.selectedDocuments
+    // 并行发起两个独立请求
+    console.log('发起并行请求')
+    
+    // 请求1：记忆检索
+    const memorySearchPromise = fetch('/api/memos/search', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        query: userMessage,
+        user_id: 'test_user_123',
+        conversation_id: chatId.value
+      })
+    }).then(async (response) => {
+      if (response.ok) {
+        const data = await response.json()
+        console.log('记忆检索响应:', data)
+        // 提取正确的记忆数据层级
+        const memoriesData = data.memories?.data || data.memories
+        console.log('提取的记忆数据:', memoriesData)
+        if (memoriesData && rightSidebarRef.value && rightSidebarRef.value.updateMemories) {
+          console.log('更新记忆到右侧面板')
+          rightSidebarRef.value.updateMemories(memoriesData)
+        }
+      } else {
+        console.error('记忆检索失败:', response.status)
+      }
+    }).catch((error) => {
+      console.error('记忆检索请求失败:', error)
     })
-    const response = await fetch(`/api/chat/${chatId.value}/chat`, {
+    
+    // 请求2：AI对话
+    const chatPromise = fetch(`/api/chat/${chatId.value}/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -238,98 +269,128 @@ const sendMessage = async () => {
         workspace_id: '00000000-0000-0000-0000-000000000000',
         selected_documents: props.selectedDocuments
       })
-    })
-    console.log('响应状态:', response.status)
-    
-    if (response.ok) {
-      const contentType = response.headers.get('Content-Type')
-      console.log('响应类型:', contentType)
-      
-      // 检查是否为流式响应 (SSE)
-      if (contentType && contentType.includes('text/event-stream')) {
-        // 流式响应处理
-        const reader = response.body.getReader()
-        const decoder = new TextDecoder()
-        let fullContent = ''
+    }).then(async (response) => {
+      if (response.ok) {
+        const contentType = response.headers.get('Content-Type')
         
-        while (true) {
-          const { done, value } = await reader.read()
-          console.log('读取数据块:', { done, value: value ? value.length : 0 })
-          if (done) break
+        // 检查是否为流式响应 (SSE)
+        if (contentType && contentType.includes('text/event-stream')) {
+          // 流式响应处理
+          const reader = response.body.getReader()
+          const decoder = new TextDecoder()
+          let fullContent = ''
           
-          const chunk = decoder.decode(value)
-          console.log('解码后的数据:', chunk)
-          const lines = chunk.split('\n')
-          console.log('分割后的行:', lines)
-          
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const data = line.substring(6)
-              console.log('提取的数据:', data)
-              if (data) {
-                try {
-                  const json = JSON.parse(data)
-                  console.log('解析后的JSON:', json)
-                  if (json.content && json.content.trim()) {
-                    fullContent += json.content
-                    console.log('当前完整内容:', fullContent)
-                    // 实时更新消息内容
-                    messages.value[aiMessageIndex] = {
-                      ...messages.value[aiMessageIndex],
-                      content: fullContent,
-                      status: 'loading'
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            
+            const chunk = decoder.decode(value)
+            const lines = chunk.split('\n')
+            
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                const data = line.substring(6)
+                if (data) {
+                  try {
+                    const json = JSON.parse(data)
+                    
+                    if (json.content && json.content.trim()) {
+                      fullContent += json.content
+                      // 实时更新消息内容
+                      messages.value[aiMessageIndex] = {
+                        ...messages.value[aiMessageIndex],
+                        content: fullContent,
+                        status: 'loading'
+                      }
+                      // 滚动到底部
+                      scrollToBottom()
                     }
-                    // 滚动到底部
-                    scrollToBottom()
-                  }
-                  if (json.is_end) {
-                    messages.value[aiMessageIndex] = {
-                      ...messages.value[aiMessageIndex],
-                      content: fullContent,
-                      status: 'completed'
+                    if (json.is_end) {
+                      messages.value[aiMessageIndex] = {
+                        ...messages.value[aiMessageIndex],
+                        content: fullContent,
+                        status: 'completed'
+                      }
+                      // 滚动到底部
+                      scrollToBottom()
+                      aiFullContent = fullContent
                     }
-                    // 滚动到底部
-                    scrollToBottom()
+                  } catch (e) {
+                    console.error('解析SSE数据失败:', e)
                   }
-                } catch (e) {
-                  console.error('解析SSE数据失败:', e)
                 }
               }
             }
           }
-        }
-      } else {
-        // 非流式响应处理
-        try {
-          const data = await response.json()
-          console.log('非流式响应数据:', data)
-          if (data.content) {
-            // 直接渲染完整回答
+        } else {
+          // 非流式响应处理
+          try {
+            const data = await response.json()
+            console.log('非流式响应数据:', data)
+            if (data.content) {
+              // 直接渲染完整回答
+              messages.value[aiMessageIndex] = {
+                ...messages.value[aiMessageIndex],
+                content: data.content,
+                status: 'completed'
+              }
+              // 滚动到底部
+              scrollToBottom()
+              aiFullContent = data.content
+            } else {
+              throw new Error('响应数据格式错误')
+            }
+          } catch (e) {
+            console.error('解析非流式响应失败:', e)
             messages.value[aiMessageIndex] = {
               ...messages.value[aiMessageIndex],
-              content: data.content,
-              status: 'completed'
+              content: `错误: ${e.message || '解析响应失败'}`,
+              status: 'error'
             }
-            // 滚动到底部
-            scrollToBottom()
-          } else {
-            throw new Error('响应数据格式错误')
-          }
-        } catch (e) {
-          console.error('解析非流式响应失败:', e)
-          messages.value[aiMessageIndex] = {
-            ...messages.value[aiMessageIndex],
-            content: `错误: ${e.message || '解析响应失败'}`,
-            status: 'error'
           }
         }
+      } else {
+        const error = await response.json()
+        messages.value[aiMessageIndex] = {
+          ...messages.value[aiMessageIndex],
+          content: `错误: ${error.error || '发送消息失败'}`,
+          status: 'error'
+        }
       }
-    } else {
-      const error = await response.json()
+    }).catch((error) => {
+      console.error('AI对话请求失败:', error)
       messages.value[aiMessageIndex] = {
         ...messages.value[aiMessageIndex],
-        content: `错误: ${error.error || '发送消息失败'}`,
+        content: `错误: ${error.message || '网络错误'}`,
         status: 'error'
+      }
+    })
+    
+    // 等待两个请求完成
+    await Promise.all([memorySearchPromise, chatPromise])
+    
+    // AI回答完全结束后，保存对话
+    if (aiFullContent) {
+      console.log('保存对话到MemOS')
+      try {
+        const saveResponse = await fetch('/api/memos/add', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            messages: [
+              { "role": "user", "content": userMessage },
+              { "role": "assistant", "content": aiFullContent }
+            ],
+            user_id: 'test_user_123',
+            conversation_id: chatId.value
+          })
+        })
+        const saveData = await saveResponse.json()
+        console.log('保存对话响应:', saveData)
+      } catch (error) {
+        console.error('保存对话失败:', error)
       }
     }
   } catch (error) {
@@ -341,6 +402,7 @@ const sendMessage = async () => {
     }
   } finally {
     isLoading.value = false
+    console.log('sendMessage finished')
   }
 }
 
@@ -458,6 +520,18 @@ const scrollToBottom = () => {
     }
   }, 100)
 }
+
+// 接收右侧边栏引用
+defineExpose({
+  setRightSidebarRef: (ref) => {
+    console.log('setRightSidebarRef called with:', ref)
+    rightSidebarRef.value = ref
+    console.log('rightSidebarRef set to:', rightSidebarRef.value)
+    if (rightSidebarRef.value) {
+      console.log('rightSidebarRef has updateMemories:', typeof rightSidebarRef.value.updateMemories === 'function')
+    }
+  }
+})
 </script>
 
 <style scoped>

@@ -130,27 +130,13 @@ const loadMemories = async (query = "") => {
       const memoryData = data.memories || data
       const newMemories = []
       
-      // 处理 memory_detail_list
-      if (memoryData.memory_detail_list && Array.isArray(memoryData.memory_detail_list)) {
-        memoryData.memory_detail_list.forEach((item, index) => {
-          if (item.memory_key) {
-            newMemories.push({
-              id: `memory_${index}`,
-              content: item.memory_key, // 只显示 memory_key，不显示 memory_value
-              tags: item.tags || [], // 包含 tags 数组
-              created_at: new Date().toISOString()
-            })
-          }
-        })
-      }
-      
-      // 处理 preference_detail_list
+      // 只处理 preference_detail_list，只展示 preference 字段
       if (memoryData.preference_detail_list && Array.isArray(memoryData.preference_detail_list)) {
         memoryData.preference_detail_list.forEach((item, index) => {
           if (item.preference) {
             newMemories.push({
               id: `preference_${index}`,
-              content: item.preference,
+              content: item.preference, // 只显示 preference 字段，不显示 reasoning
               created_at: new Date().toISOString()
             })
           }
@@ -399,13 +385,9 @@ const observer = new MutationObserver(() => {
 })
 
 onMounted(() => {
-  // 加载记忆
-  loadMemories()
-  
   // 初始化图谱
   if (graphContainer.value) {
     chart = echarts.init(graphContainer.value)
-    loadGraphData()
     window.addEventListener('resize', handleResize)
   }
   
@@ -427,48 +409,93 @@ onUnmounted(() => {
 // 从对话数据中更新记忆
 defineExpose({
   updateMemories: (memoryData) => {
+    console.log('updateMemories called with:', memoryData)
     try {
       // 处理 search_memory 返回的结果
       const newMemories = []
       
+      // 优先从根节点提取数据，兜底兼容data层级
+      const memoryDetailList = memoryData.memory_detail_list || memoryData?.data?.memory_detail_list || []
+      const preferenceDetailList = memoryData.preference_detail_list || memoryData?.data?.preference_detail_list || []
+      
+      console.log('Extracted memory_detail_list:', memoryDetailList)
+      console.log('Extracted preference_detail_list:', preferenceDetailList)
+      
       // 处理 memory_detail_list
-      if (memoryData.memory_detail_list && Array.isArray(memoryData.memory_detail_list)) {
-        memoryData.memory_detail_list.forEach((item, index) => {
-          if (item.memory_key) {
+      if (Array.isArray(memoryDetailList)) {
+        console.log('Processing memory_detail_list:', memoryDetailList)
+        memoryDetailList.forEach((item, index) => {
+          if (item.memory_value || item.memory_key) {
             newMemories.push({
-              id: `memory_${index}`,
-              content: item.memory_key, // 只显示 memory_key，不显示 memory_value
-              tags: item.tags || [], // 包含 tags 数组
-              created_at: new Date().toISOString()
+              id: item.id || `memory_${index}`,
+              content: item.memory_value || item.memory_key, // 优先使用memory_value，兜底使用memory_key
+              tags: item.tags || [],
+              created_at: item.create_time ? new Date(item.create_time).toISOString() : new Date().toISOString(),
+              relativity: item.relativity || 0.5
             })
           }
         })
       }
       
       // 处理 preference_detail_list
-      if (memoryData.preference_detail_list && Array.isArray(memoryData.preference_detail_list)) {
-        memoryData.preference_detail_list.forEach((item, index) => {
+      if (Array.isArray(preferenceDetailList)) {
+        console.log('Processing preference_detail_list:', preferenceDetailList)
+        preferenceDetailList.forEach((item, index) => {
           if (item.preference) {
             newMemories.push({
-              id: `preference_${index}`,
+              id: item.id || `preference_${index}`,
               content: item.preference,
-              created_at: new Date().toISOString()
+              created_at: item.create_time ? new Date(item.create_time).toISOString() : new Date().toISOString(),
+              relativity: item.relativity || 0.5
             })
           }
         })
       }
       
+      console.log('New memories:', newMemories)
       if (newMemories.length > 0) {
         memories.value = newMemories
+        console.log('Memories updated:', memories.value)
+      } else {
+        console.log('No memories found to update')
       }
+      
+      // 构建图谱数据（即使没有graph字段）
+      const graphData = {
+        nodes: [],
+        edges: []
+      }
+      
+      // 从记忆数据中构建图谱
+      if (newMemories.length > 0) {
+        newMemories.forEach((memory, index) => {
+          // 计算节点大小：20 + (relativity || 0.5) * 60
+          const nodeSize = 20 + (memory.relativity || 0.5) * 60
+          graphData.nodes.push({
+            id: memory.id,
+            label: memory.content.substring(0, 20) + '...',
+            content: memory.content,
+            size: nodeSize,
+            color: `#${(index * 50 % 255).toString(16).padStart(2, '0')}${(index * 100 % 255).toString(16).padStart(2, '0')}${(index * 150 % 255).toString(16).padStart(2, '0')}`
+          })
+          if (index > 0) {
+            graphData.edges.push({
+              source: newMemories[index - 1].id,
+              target: memory.id
+            })
+          }
+        })
+      }
+      
+      console.log('Graph data:', graphData)
+      updateChart(graphData.nodes, graphData.edges)
     } catch (error) {
       console.error('Failed to update memories:', error)
     }
   }
 })
 
-// 定时刷新记忆列表
-setInterval(loadMemories, 30000) // 每30秒刷新一次
+// 移除定时刷新，只在对话结束后更新
 </script>
 
 <style scoped>

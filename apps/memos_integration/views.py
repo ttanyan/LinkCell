@@ -6,8 +6,29 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.views import View
 import json
+from dataclasses import asdict
+import inspect
 from .models import Memory, Conversation, Message, Document, MemoryGraph
 from .client import memos_client
+
+
+def convert_to_dict(obj):
+    """将对象转换为字典，优先使用.dict()方法，其次使用asdict()，最后使用.__dict__"""
+    try:
+        # 优先使用对象自带的dict()方法
+        if hasattr(obj, 'dict') and callable(obj.dict):
+            return obj.dict()
+        # 其次使用dataclasses.asdict()
+        return asdict(obj)
+    except Exception as e:
+        print(f"Error using asdict: {e}")
+        # 兜底使用__dict__
+        try:
+            return obj.__dict__
+        except Exception as e2:
+            print(f"Error using __dict__: {e2}")
+            # 最后返回空字典
+            return {}
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -124,18 +145,76 @@ class MemoryDeleteView(View):
             return JsonResponse({'status': 'success'})
 
 
-@method_decorator(login_required, name='dispatch')
 @method_decorator(csrf_exempt, name='dispatch')
 class MemorySearchView(View):
     """Search memories semantically"""
-    def get(self, request):
+    def post(self, request):
         try:
-            query = request.GET.get('query', '')
+            data = json.loads(request.body)
+            query = data.get('query', '')
+            user_id = data.get('user_id', 'test_user_123')
+            conversation_id = data.get('conversation_id', '')
+            
+            if not query:
+                return JsonResponse({'memories': {'memory_detail_list': [], 'preference_detail_list': []}})
+            
             # 调用MemOS API搜索记忆
-            memories = memos_client.search_memory(str(request.user.id), query)
-            return JsonResponse({'memories': memories, 'status': 'success'})
+            memories = memos_client.search_memory(query=query, user_id=user_id, conversation_id=conversation_id)
+            
+            # 将MemOS SDK返回的对象转换为字典
+            try:
+                memories_dict = convert_to_dict(memories)
+                return JsonResponse({'memories': memories_dict})
+            except Exception as serialize_error:
+                # 序列化失败时，打印错误日志，但仍尝试返回数据
+                print(f"Serialize memory failed: {serialize_error}")
+                print(f"Original memory object: {memories}")
+                # 尝试直接返回，看是否能序列化
+                try:
+                    return JsonResponse({'memories': memories})
+                except:
+                    # 如果还是失败，返回空结构
+                    return JsonResponse({'memories': {'memory_detail_list': [], 'preference_detail_list': []}})
         except Exception as e:
-            return JsonResponse({'error': str(e), 'status': 'error'}, status=400)
+            # SDK调用完全失败时，返回兜底的空结构
+            print(f"Search memory failed: {e}")
+            return JsonResponse({'memories': {'memory_detail_list': [], 'preference_detail_list': []}})
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class MemoryAddView(View):
+    """Add conversation to MemOS"""
+    def post(self, request):
+        try:
+            data = json.loads(request.body)
+            messages = data.get('messages', [])
+            user_id = data.get('user_id', 'test_user_123')
+            conversation_id = data.get('conversation_id', '')
+            
+            if not messages or len(messages) < 2:
+                return JsonResponse({'status': 'error', 'message': 'Messages must contain at least user and assistant messages'})
+            
+            # 调用MemOS API添加对话
+            result = memos_client.add_message(messages=messages, user_id=user_id, conversation_id=conversation_id)
+            
+            # 将MemOS SDK返回的对象转换为字典
+            try:
+                result_dict = convert_to_dict(result)
+                return JsonResponse({'status': 'success', 'result': result_dict})
+            except Exception as serialize_error:
+                # 序列化失败时，打印错误日志，但仍返回success状态
+                print(f"Serialize add message result failed: {serialize_error}")
+                print(f"Original result object: {result}")
+                # 尝试直接返回，看是否能序列化
+                try:
+                    return JsonResponse({'status': 'success', 'result': result})
+                except:
+                    # 如果还是失败，返回success状态但result为空
+                    return JsonResponse({'status': 'success', 'result': {}})
+        except Exception as e:
+            # SDK调用完全失败时，返回error状态
+            print(f"Add message failed: {e}")
+            return JsonResponse({'status': 'error', 'message': str(e)})
 
 
 @method_decorator(login_required, name='dispatch')

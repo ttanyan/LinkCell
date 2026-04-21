@@ -5,15 +5,15 @@
     />
     <div class="main-container" v-if="!showSettings">
       <LeftSidebar :selectedDocuments="selectedDocuments" @update:selectedDocuments="selectedDocuments = $event" />
-      <MainContent :selectedDocuments="selectedDocuments" @update:selectedDocuments="selectedDocuments = $event" />
-      <RightSidebar />
+      <MainContent :selectedDocuments="selectedDocuments" @update:selectedDocuments="selectedDocuments = $event" ref="mainContentRef" />
+      <RightSidebar ref="rightSidebarRef" />
     </div>
     <Settings v-else @close-settings="showSettings = false" />
   </div>
 </template>
 
 <script setup>
-import { ref, provide } from 'vue'
+import { ref, provide, onMounted } from 'vue'
 import AppHeader from './components/AppHeader.vue'
 import LeftSidebar from './components/LeftSidebar.vue'
 import MainContent from './components/MainContent.vue'
@@ -22,9 +22,30 @@ import Settings from './components/Settings.vue'
 
 const showSettings = ref(false)
 const selectedDocuments = ref([])
+const rightSidebarRef = ref(null)
+const mainContentRef = ref(null)
 
 // 提供共享状态
 provide('selectedDocuments', selectedDocuments)
+
+// 组件挂载后，将 rightSidebarRef 传递给 mainContentRef
+onMounted(() => {
+  console.log('App mounted')
+  // 添加延迟，确保组件完全挂载
+  setTimeout(() => {
+    console.log('mainContentRef.value:', mainContentRef.value)
+    console.log('rightSidebarRef.value:', rightSidebarRef.value)
+    if (mainContentRef.value && rightSidebarRef.value) {
+      console.log('Setting rightSidebarRef')
+      mainContentRef.value.setRightSidebarRef(rightSidebarRef.value)
+    } else {
+      console.log('Failed to set rightSidebarRef:', {
+        mainContentRef: !!mainContentRef.value,
+        rightSidebarRef: !!rightSidebarRef.value
+      })
+    }
+  }, 1000)
+})
 </script>
 
 <style scoped>

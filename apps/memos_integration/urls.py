@@ -8,6 +8,7 @@ from .views import (
     MemoryUpdateView,
     MemoryDeleteView,
     MemorySearchView,
+    MemoryAddView,
     ConversationCreateView,
     DocumentUploadView,
     RAGRetrieveView,
@@ -22,6 +23,7 @@ urlpatterns = [
     path('memos/update/<str:memory_id>', MemoryUpdateView.as_view(), name='memory-update'),
     path('memos/delete/<str:memory_id>', MemoryDeleteView.as_view(), name='memory-delete'),
     path('memos/search', MemorySearchView.as_view(), name='memory-search'),
+    path('memos/add', MemoryAddView.as_view(), name='memory-add'),
     
     # 会话管理
     path('conversations/create', ConversationCreateView.as_view(), name='conversation-create'),
