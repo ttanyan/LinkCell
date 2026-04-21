@@ -1,5 +1,7 @@
 # LinkCell
 
+[English](README_EN.md) | 简体中文
+
 LinkCell 是一个集成了 MemOS SDK 的智能对话系统，提供记忆管理、智能语义检索、会话管理等功能。
 
 ## 功能特性
